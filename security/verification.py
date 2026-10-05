@@ -1,5 +1,6 @@
 from security.canonical import create_canonical_payload
 from security.ecdsa import verify_signature
+from security.hashing import calculate_sha256
 from security.verdicts import Verdict
 from security.nonce import is_nonce_reused, is_expired
 
@@ -14,6 +15,7 @@ def verify_message(
     timestamp_datetime,
     nonce: str,
     message: str,
+    expected_content_hash: str,
     sender_known: bool,
     used_nonces: set[str],
     max_age_seconds: int,
@@ -21,19 +23,19 @@ def verify_message(
     key_revoked: bool = False,
 ) -> Verdict:
 
-    # 1. Check whether the sender is known
+    # 1. Check sender
     if not sender_known:
         return Verdict.UNKNOWN_SENDER
 
-    # 2. Check whether the key is revoked
+    # 2. Check key status
     if key_revoked:
         return Verdict.REVOKED_KEY
 
-    # 3. Check nonce replay
+    # 3. Check replay
     if is_nonce_reused(nonce, used_nonces):
         return Verdict.REPLAY
 
-    # 4. Check message expiry
+    # 4. Check expiry
     if is_expired(
         timestamp_datetime,
         max_age_seconds,
@@ -41,7 +43,7 @@ def verify_message(
     ):
         return Verdict.EXPIRED
 
-    # 5. Recreate the exact canonical payload
+    # 5. Recreate canonical payload
     canonical_payload = create_canonical_payload(
         sender=sender,
         receiver=receiver,
@@ -50,7 +52,14 @@ def verify_message(
         message=message
     )
 
-    # 6. Verify the actual ECDSA signature
+    # 6. Recalculate content hash
+    actual_content_hash = calculate_sha256(canonical_payload)
+
+    # 7. Detect content tampering
+    if actual_content_hash != expected_content_hash:
+        return Verdict.TAMPERED
+
+    # 8. Verify digital signature
     if not verify_signature(
         public_key,
         canonical_payload,
@@ -58,5 +67,5 @@ def verify_message(
     ):
         return Verdict.INVALID_SIGNATURE
 
-    # 7. Everything passed
+    # 9. Everything passed
     return Verdict.GENUINE
