@@ -1,0 +1,11 @@
+from enum import Enum
+
+
+class Verdict(str, Enum):
+    GENUINE = "GENUINE"
+    TAMPERED = "TAMPERED"
+    INVALID_SIGNATURE = "INVALID_SIGNATURE"
+    UNKNOWN_SENDER = "UNKNOWN_SENDER"
+    REPLAY = "REPLAY"
+    EXPIRED = "EXPIRED"
+    REVOKED_KEY = "REVOKED_KEY"

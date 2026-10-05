@@ -16,7 +16,9 @@ def test_raw_ecdsa_to_der():
 
     der_signature = raw_ecdsa_to_der(raw_signature)
 
-    decoded_r, decoded_s = utils.decode_dss_signature(der_signature)
+    decoded_r, decoded_s = utils.decode_dss_signature(
+        der_signature
+    )
 
     assert decoded_r == r
     assert decoded_s == s

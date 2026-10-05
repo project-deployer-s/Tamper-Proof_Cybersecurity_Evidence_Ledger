@@ -3,11 +3,13 @@ from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 
 def raw_ecdsa_to_der(raw_signature: bytes) -> bytes:
     """
-    Convert a WebCrypto ECDSA P-256 signature from
-    raw r || s format into DER format.
+    Convert a WebCrypto ECDSA P-256 signature
+    from raw r || s format to DER format.
 
-    WebCrypto P-256 signature:
-        64 bytes = 32-byte r + 32-byte s
+    Raw signature:
+        64 bytes
+        ├── 32 bytes r
+        └── 32 bytes s
     """
 
     if len(raw_signature) != 64:
