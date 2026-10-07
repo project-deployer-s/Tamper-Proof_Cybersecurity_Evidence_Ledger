@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Crypto Test</title>
+</head>
+
+<body>
+
+<h1>WebCrypto Test</h1>
+
+<button onclick="runTest()">Generate Signature</button>
+
+<pre id="output"></pre>
+
+<script src="/static/js/crypto.js"></script>
+
+<script>
+async function runTest() {
+    try {
+        const result = await getCryptoTestData();
+
+        document.getElementById("output").textContent =
+            "Payload:\n" +
+            result.payload +
+            "\n\nPublic Key Base64:\n" +
+            result.publicKeyBase64 +
+            "\n\nSignature Base64:\n" +
+            result.signatureBase64;
+
+    } catch (error) {
+        document.getElementById("output").textContent =
+            "Error: " + error;
+        console.error(error);
+    }
+}
+</script>
+
+</body>
+</html>
