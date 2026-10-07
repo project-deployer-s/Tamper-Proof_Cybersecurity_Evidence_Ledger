@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Send a message - Evidence Ledger</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+  <div class="shell">
+    <nav class="rail" id="rail" aria-label="Main"></nav>
+    <main class="main" id="main">
+      <header class="page-head">
+        <h1>Send a message</h1>
+        <p>Your message is signed with your key, so the receiver can prove it came from you and was not changed.</p>
+      </header>
+
+      <div class="split" style="grid-template-columns:minmax(300px,560px) 1fr">
+        <form class="panel" id="send-form" novalidate>
+          <div class="field">
+            <label for="to">To</label>
+            <select id="to" required></select>
+          </div>
+          <div class="field">
+            <label for="body">Message</label>
+            <textarea id="body" maxlength="2000" required></textarea>
+            <p class="hint"><span id="count">0</span> of 2000 characters</p>
+          </div>
+          <div class="field">
+            <label for="file">Attachment</label>
+            <input type="text" id="file" value="Attachments arrive in a later version" disabled>
+          </div>
+          <p class="error-text" id="send-error" role="alert" hidden></p>
+          <button class="btn" type="submit" id="send-btn">Sign and send</button>
+        </form>
+
+        <section id="outcome" aria-live="polite"></section>
+      </div>
+    </main>
+  </div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <script src="/static/js/mock-api.js"></script>
+  <script src="/static/js/app.js"></script>
+  <script src="/static/js/send.js"></script>
+</body>
+</html>

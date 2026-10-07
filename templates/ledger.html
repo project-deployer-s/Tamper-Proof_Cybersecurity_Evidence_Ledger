@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ledger and alerts - Evidence Ledger</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+  <div class="shell">
+    <nav class="rail" id="rail" aria-label="Main"></nav>
+    <main class="main" id="main">
+      <header class="page-head">
+        <h1>Ledger and alerts</h1>
+        <p>Every message sent and every check is recorded here. Each entry stores the hash of the one before it, so changing an old entry breaks the chain.</p>
+      </header>
+
+      <div class="tabs" role="tablist" aria-label="Ledger views">
+        <button class="tab" role="tab" id="tab-ledger" aria-selected="true" aria-controls="view-ledger" type="button">Ledger</button>
+        <button class="tab" role="tab" id="tab-alerts" aria-selected="false" aria-controls="view-alerts" type="button">Alerts</button>
+      </div>
+
+      <section id="view-ledger" role="tabpanel" aria-labelledby="tab-ledger">
+        <div class="ledger-bar">
+          <div>
+            <div id="summary" class="fine"></div>
+          </div>
+          <div class="row">
+            <button class="btn secondary" type="button" id="copy-head">Copy latest hash</button>
+            <button class="btn" type="button" id="check-chain">Check the chain</button>
+          </div>
+        </div>
+        <div id="banner" role="status" hidden></div>
+        <ol class="chain" id="chain" aria-label="Ledger entries, newest first"></ol>
+      </section>
+
+      <section id="view-alerts" role="tabpanel" aria-labelledby="tab-alerts" hidden>
+        <div id="alerts"></div>
+      </section>
+    </main>
+  </div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <script src="/static/js/mock-api.js"></script>
+  <script src="/static/js/app.js"></script>
+  <script src="/static/js/ledger.js"></script>
+</body>
+</html>
