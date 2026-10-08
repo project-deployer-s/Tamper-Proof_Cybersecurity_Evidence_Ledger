@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Attack demo - Evidence Ledger</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+  <div class="shell">
+    <nav class="rail" id="rail" aria-label="Main"></nav>
+    <main class="main" id="main">
+      <header class="page-head">
+        <h1>Attack demo</h1>
+        <p>Play the attacker. Change something, then check the message or the ledger and watch the system catch it. This page only exists in demo mode.</p>
+      </header>
+
+      <div class="stack" style="max-width:760px">
+
+        <section class="panel attack" aria-labelledby="a1">
+          <h2 id="a1">Change a message in transit</h2>
+          <p class="why">A hash alone does not stop a careful attacker, who can change the text and rewrite the hash too. The signature still gives them away.</p>
+          <div class="field">
+            <label for="a1-msg">Message to change</label>
+            <select id="a1-msg"></select>
+          </div>
+          <div class="field">
+            <label for="a1-text">New text</label>
+            <input type="text" id="a1-text" value="Transfer approved for case 99.">
+          </div>
+          <div class="check-line">
+            <input type="checkbox" id="a1-rehash">
+            <label for="a1-rehash" style="margin:0">Also rewrite the hash to match (a careful attacker)</label>
+          </div>
+          <button class="btn danger" type="button" id="a1-go">Change the message</button>
+          <div class="attack-result" id="a1-out" aria-live="polite"></div>
+        </section>
+
+        <section class="panel attack" aria-labelledby="a2">
+          <h2 id="a2">Send a message a second time</h2>
+          <p class="why">The server remembers every one-time number and every timestamp, so a captured message cannot be reused later.</p>
+          <div class="field">
+            <label for="a2-msg">Captured message</label>
+            <select id="a2-msg"></select>
+          </div>
+          <div class="row">
+            <button class="btn danger" type="button" id="a2-replay">Submit it again</button>
+            <button class="btn danger" type="button" id="a2-old">Submit an old message</button>
+          </div>
+          <div class="attack-result" id="a2-out" aria-live="polite"></div>
+        </section>
+
+        <section class="panel attack" aria-labelledby="a3">
+          <h2 id="a3">Rewrite the ledger</h2>
+          <p class="why">Hide a failed check by editing the record. The chain check will point at the entry that was changed.</p>
+          <div class="field">
+            <label for="a3-entry">Entry to change</label>
+            <select id="a3-entry"></select>
+            <p class="hint">Failed checks are listed first. Check a few messages in the inbox to create some.</p>
+          </div>
+          <button class="btn danger" type="button" id="a3-go">Change the entry</button>
+          <div class="attack-result" id="a3-out" aria-live="polite"></div>
+        </section>
+
+        <section class="panel attack" aria-labelledby="a4">
+          <h2 id="a4">Start over</h2>
+          <p class="why">Put the sample data back, or clear everything for a clean demo.</p>
+          <div class="row">
+            <button class="btn secondary" type="button" id="reset-sample">Restore sample data</button>
+            <button class="btn secondary" type="button" id="reset-empty">Clear everything</button>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <script src="/static/js/mock-api.js"></script>
+  <script src="/static/js/app.js"></script>
+  <script src="/static/js/demo.js"></script>
+</body>
+</html>

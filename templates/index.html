@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in - Evidence Ledger</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+  <div class="auth-shell">
+    <div class="auth-grid">
+
+      <section>
+        <h1>Check that a message is genuine and unchanged</h1>
+        <p class="lead" style="margin-top:12px">Every message is signed by its sender. The receiver can check the signature at any time, and every check is written to a ledger that nobody can quietly edit.</p>
+        <ol class="steps">
+          <li><strong>Sign.</strong> The sender's private key signs the message in their browser.</li>
+          <li><strong>Send.</strong> The server stores the message and records it in the ledger.</li>
+          <li><strong>Check.</strong> The receiver checks sender, content and signature, and gets a clear verdict.</li>
+        </ol>
+      </section>
+
+      <section class="panel auth-panel" aria-labelledby="auth-title">
+        <div class="tabs" role="tablist" aria-label="Account">
+          <button class="tab" role="tab" id="tab-signin" aria-selected="true" aria-controls="pane-signin" type="button">Sign in</button>
+          <button class="tab" role="tab" id="tab-signup" aria-selected="false" aria-controls="pane-signup" type="button">Create account</button>
+        </div>
+
+        <!-- Sign in -->
+        <form id="pane-signin" role="tabpanel" aria-labelledby="tab-signin" novalidate>
+          <div class="field">
+            <label for="si-user">Username</label>
+            <input type="text" id="si-user" autocomplete="username" autocapitalize="none" required>
+          </div>
+          <div class="field">
+            <label for="si-pass">Password</label>
+            <input type="password" id="si-pass" autocomplete="current-password" required>
+          </div>
+          <p class="error-text" id="si-error" role="alert" hidden></p>
+          <button class="btn" type="submit">Sign in</button>
+          <div class="samples fine">
+            <strong>Sample accounts</strong> (any password works in this prototype):
+            <br>bob receives sample messages. alice sends. carol audits. dave has a revoked key.
+          </div>
+        </form>
+
+        <!-- Create account -->
+        <form id="pane-signup" role="tabpanel" aria-labelledby="tab-signup" hidden novalidate>
+          <div class="field">
+            <label for="su-user">Choose a username</label>
+            <input type="text" id="su-user" autocomplete="username" autocapitalize="none" required>
+            <p class="hint">3 to 20 letters, numbers or underscores.</p>
+          </div>
+          <div class="field">
+            <label for="su-pass">Choose a password</label>
+            <input type="password" id="su-pass" autocomplete="new-password" required>
+            <p class="hint">At least 8 characters.</p>
+          </div>
+          <p class="error-text" id="su-error" role="alert" hidden></p>
+          <button class="btn" type="submit">Create account</button>
+        </form>
+
+        <!-- Key setup, shown after the account is created -->
+        <div id="pane-key" hidden>
+          <h2 id="auth-title">Create your signing key</h2>
+          <p class="fine" style="margin-top:6px">Your private key signs your messages and never leaves this browser. Only the public half goes to the server.</p>
+          <div class="row" style="margin:14px 0">
+            <button class="btn" type="button" id="make-key">Create my key pair</button>
+          </div>
+          <div id="key-result" hidden>
+            <div class="label">Your key fingerprint</div>
+            <div class="fingerprint" id="fingerprint"></div>
+            <p class="hint">Check this fingerprint with the people you message, so they know your public key is really yours.</p>
+            <div class="row" style="margin-top:14px">
+              <button class="btn secondary" type="button" id="download-key">Download private key backup</button>
+              <a class="btn" href="inbox.html">Continue to inbox</a>
+            </div>
+            <p class="hint">Keep the backup somewhere safe. If you lose your key you must revoke it and create a new one.</p>
+          </div>
+          <p class="fine" style="margin-top:14px">Prototype: the key shown here is simulated.</p>
+        </div>
+      </section>
+
+    </div>
+  </div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <script src="/static/js/mock-api.js"></script>
+  <script src="/static/js/app.js"></script>
+  <script src="/static/js/login.js"></script>
+</body>
+</html>
