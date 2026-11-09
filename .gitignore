@@ -1,5 +1,22 @@
+# Python
 __pycache__/
 *.py[cod]
 .venv/
+
+# Environment variables and secrets
 .env
+.env.*
+!.env.example
+
+# Private keys
+*.pem
+*.key
+private_key.pem
+
+# Local databases
+instance/
+*.db
+*.sqlite3
+
+# Testing
 .pytest_cache/
