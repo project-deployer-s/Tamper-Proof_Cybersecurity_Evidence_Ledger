@@ -23,8 +23,11 @@
     String(value === undefined || value === null ? '' : value).replace(/[&<>"']/g, (c) =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-  App.fmtTime = (ts) =>
-    new Date(ts * 1000).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  // Accepts an ISO string (real backend) or epoch seconds (old sample data).
+  App.fmtTime = (ts) => {
+    const d = new Date(typeof ts === 'number' ? ts * 1000 : ts);
+    return isNaN(d) ? '' : d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  };
 
   App.short = (hash, n) => (hash ? hash.slice(0, n || 10) + '…' : '');
 
@@ -77,3 +80,4 @@
 
   window.App = App;
 })();
+
