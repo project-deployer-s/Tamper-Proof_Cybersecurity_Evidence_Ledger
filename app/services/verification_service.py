@@ -12,23 +12,29 @@ from app.models import User, PublicKey, Message
 
 from app.services.alert_service import create_alert
 from app.services.ledger_service import append_ledger_event
-from app.services.anchor_service import publish_anchor
+from app.services.anchor_service import publish_and_update_outbox
 
 from security.verification import verify_message
 from security.verdicts import Verdict
 from security.signature_format import raw_ecdsa_to_der
 
 
-def verify_stored_message(message_id, max_age_seconds=300):
+def verify_stored_message(message_id, actor_id, max_age_seconds=300):
 
     try:
-        # 1. Retrieve the message
+        # 1. Retrieve message
         message = db.session.get(Message, message_id)
 
         if not message:
             return None, "Message not found"
 
-        # 2. Retrieve the sender
+        # 2. Retrieve actual verifier
+        actor_user = db.session.get(User, actor_id)
+
+        if not actor_user:
+            return None, "Verifier not found"
+
+        # 3. Retrieve sender
         sender_user = db.session.get(
             User, message.sender_user_id
         )
@@ -36,10 +42,25 @@ def verify_stored_message(message_id, max_age_seconds=300):
         if not sender_user:
             return None, "Sender not found"
 
-        # 3. Validate sender identity
+        # 4. Check verifier authorization
+        receiver_user = User.query.filter_by(
+            username=message.receiver
+        ).first()
+
+        is_sender = actor_user.id == message.sender_user_id
+
+        is_receiver = (
+            receiver_user is not None
+            and actor_user.id == receiver_user.id
+        )
+
+        if not (is_sender or is_receiver):
+            return None, "User is not authorized to verify this message"
+
+        # 5. Validate sender identity
         sender_known = message.sender == sender_user.username
 
-        # 4. Retrieve the public key
+        # 6. Retrieve public key
         public_key_record = db.session.get(
             PublicKey, message.public_key_id
         )
@@ -47,7 +68,7 @@ def verify_stored_message(message_id, max_age_seconds=300):
         if not public_key_record:
             return None, "Public key not found"
 
-        # 5. Retrieve previously used nonces
+        # 7. Retrieve previously used nonces
         used_nonces = {
             nonce
             for (nonce,) in db.session.query(Message.nonce)
@@ -55,7 +76,7 @@ def verify_stored_message(message_id, max_age_seconds=300):
             .all()
         }
 
-        # 6. Decode and load the Base64 public key
+        # 8. Decode public key
         try:
             public_key_bytes = base64.b64decode(
                 public_key_record.public_key,
@@ -74,7 +95,7 @@ def verify_stored_message(message_id, max_age_seconds=300):
         ):
             return None, "Invalid public key format"
 
-        # 7. Validate the actual public key type and curve
+        # 9. Validate ECDSA P-256 key
         if (
             public_key_record.algorithm != "ECDSA-P256"
             or not isinstance(
@@ -86,7 +107,7 @@ def verify_stored_message(message_id, max_age_seconds=300):
         ):
             return None, "Invalid ECDSA P-256 public key"
 
-        # 8. Decode the Base64 signature
+        # 10. Decode signature
         try:
             raw_signature = base64.b64decode(
                 message.signature,
@@ -98,7 +119,7 @@ def verify_stored_message(message_id, max_age_seconds=300):
         except (ValueError, TypeError, binascii.Error):
             return None, "Invalid signature format"
 
-        # 9. Prepare timestamp
+        # 11. Prepare timestamp
         timestamp_datetime = message.timestamp
 
         if timestamp_datetime.tzinfo is None:
@@ -106,7 +127,7 @@ def verify_stored_message(message_id, max_age_seconds=300):
                 tzinfo=timezone.utc
             )
 
-        # 10. Run the security verification engine
+        # 12. Run verification engine
         verdict = verify_message(
             public_key=public_key,
             signature=der_signature,
@@ -123,15 +144,18 @@ def verify_stored_message(message_id, max_age_seconds=300):
             key_revoked=public_key_record.is_revoked
         )
 
-        # 11. Update verification status
+        # 13. Update verification status
         message.verification_status = verdict.value
 
-        # 12. Append ledger event without committing
+        # 14. Create ledger event with actual verifier identity
         ledger_entry, error = append_ledger_event(
             "VERIFIED",
             message_id=message.id,
-            actor_id=message.sender_user_id,
-            detail={"verdict": verdict.value},
+            actor_id=actor_user.id,
+            detail={
+                "verdict": verdict.value,
+                "verified_by": actor_user.username
+            },
             commit=False
         )
 
@@ -139,7 +163,7 @@ def verify_stored_message(message_id, max_age_seconds=300):
             db.session.rollback()
             return None, error or "Failed to record verification event"
 
-        # 13. Create alert for non-genuine messages
+        # 15. Create alert for non-genuine messages
         alert = None
 
         if verdict != Verdict.GENUINE:
@@ -154,11 +178,11 @@ def verify_stored_message(message_id, max_age_seconds=300):
                 db.session.rollback()
                 return None, error or "Failed to create alert"
 
-        # 14. Commit all database changes together
+        # 16. Commit local changes
         db.session.commit()
 
-        # 15. Publish committed ledger hash to Supabase
-        success, anchor_error = publish_anchor(
+        # 17. Publish external anchor
+        success, anchor_error = publish_and_update_outbox(
             ledger_entry.seq,
             ledger_entry.entry_hash
         )
@@ -169,12 +193,14 @@ def verify_stored_message(message_id, max_age_seconds=300):
                 anchor_error
             )
 
-        # 16. Return verification result
+        # 18. Return result
         return {
             "message_id": message.id,
             "verdict": verdict.value,
             "ledger_seq": ledger_entry.seq,
-            "alert_id": alert.id if alert else None
+            "alert_id": alert.id if alert else None,
+            "verified_by": actor_user.username,
+            "verified_by_id": actor_user.id
         }, None
 
     except Exception:

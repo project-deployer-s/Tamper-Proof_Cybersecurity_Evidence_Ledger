@@ -8,3 +8,4 @@ gunicorn>=22.0,<24.0
 cryptography>=42.0
 pytest>=8.0
 redis
+Flask-JWT-Extended>=4.6,<5.0

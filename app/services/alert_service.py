@@ -1,3 +1,4 @@
+
 from app.extensions import db
 from app.models import Alert, LedgerEntry
 
@@ -8,37 +9,64 @@ def create_alert(
     severity="HIGH",
     commit=True
 ):
+    """
+    Create a security alert linked to a ledger entry.
 
-    # Check whether ledger entry exists
+    When commit=False, the caller controls the transaction.
+    """
+
+    # 1. Check whether ledger entry exists
     entry = db.session.get(LedgerEntry, ledger_seq)
 
     if not entry:
         return None, "Ledger entry not found"
 
-    # Create alert
-    alert = Alert(
-        ledger_seq=ledger_seq,
-        alert_type=alert_type,
-        severity=severity
-    )
+    try:
+        # 2. Create alert
+        alert = Alert(
+            ledger_seq=ledger_seq,
+            alert_type=alert_type,
+            severity=severity
+        )
 
-    db.session.add(alert)
-    db.session.flush()
+        db.session.add(alert)
+        db.session.flush()
 
-    if commit:
-        db.session.commit()
+        # 3. Commit only when requested
+        if commit:
+            db.session.commit()
 
-    return alert, None
+        return alert, None
+
+    except Exception as exc:
+        db.session.rollback()
+
+        print("ALERT CREATION ERROR:", repr(exc))
+
+        return None, "Failed to create security alert"
 
 
 def acknowledge_alert(alert_id):
+    """Acknowledge an existing security alert."""
 
+    # 1. Retrieve alert
     alert = db.session.get(Alert, alert_id)
 
     if not alert:
         return None, "Alert not found"
 
-    alert.acknowledge()
-    db.session.commit()
+    try:
+        # 2. Update acknowledgement status
+        alert.acknowledge()
 
-    return alert, None
+        # 3. Commit changes
+        db.session.commit()
+
+        return alert, None
+
+    except Exception as exc:
+        db.session.rollback()
+
+        print("ALERT ACKNOWLEDGEMENT ERROR:", repr(exc))
+
+        return None, "Failed to acknowledge alert"

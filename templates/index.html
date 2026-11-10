@@ -32,8 +32,8 @@
         <!-- Sign in -->
         <form id="pane-signin" role="tabpanel" aria-labelledby="tab-signin" novalidate>
           <div class="field">
-            <label for="si-user">Username</label>
-            <input type="text" id="si-user" autocomplete="username" autocapitalize="none" required>
+            <label for="si-user">Email address</label>
+            <input type="email" id="si-user" autocomplete="email" required>
           </div>
           <div class="field">
             <label for="si-pass">Password</label>
@@ -41,14 +41,14 @@
           </div>
           <p class="error-text" id="si-error" role="alert" hidden></p>
           <button class="btn" type="submit">Sign in</button>
-          <div class="samples fine">
-            <strong>Sample accounts</strong> (any password works in this prototype):
-            <br>bob receives sample messages. alice sends. carol audits. dave has a revoked key.
-          </div>
         </form>
 
         <!-- Create account -->
         <form id="pane-signup" role="tabpanel" aria-labelledby="tab-signup" hidden novalidate>
+          <div class="field">
+  <label for="su-email">Email address</label>
+  <input type="email" id="su-email" autocomplete="email" required>
+</div>
           <div class="field">
             <label for="su-user">Choose a username</label>
             <input type="text" id="su-user" autocomplete="username" autocapitalize="none" required>
@@ -80,7 +80,6 @@
             </div>
             <p class="hint">Keep the backup somewhere safe. If you lose your key you must revoke it and create a new one.</p>
           </div>
-          <p class="fine" style="margin-top:14px">Prototype: the key shown here is simulated.</p>
         </div>
       </section>
 
@@ -88,8 +87,9 @@
   </div>
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script src="/static/js/mock-api.js"></script>
-  <script src="/static/js/app.js"></script>
-  <script src="/static/js/login.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/app.js"></script>
+<script src="/static/js/crypto.js"></script>
+<script src="/static/js/login.js"></script>
 </body>
 </html>

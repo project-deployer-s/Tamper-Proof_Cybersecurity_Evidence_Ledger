@@ -1,4 +1,4 @@
-
+from datetime import timedelta
 import os
 
 
@@ -37,6 +37,10 @@ if ENVIRONMENT == "production":
 
 class Config:
     SECRET_KEY = SECRET or "local-development-key-change-before-deployment"
+        # JWT Authentication
+    JWT_SECRET_KEY = SECRET or "local-development-key-change-before-deployment"
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=30)
+    JWT_ALGORITHM = "HS256"
 
     SQLALCHEMY_DATABASE_URI = normalize_database_url(
         os.getenv(

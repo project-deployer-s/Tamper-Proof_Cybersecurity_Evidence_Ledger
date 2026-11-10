@@ -262,3 +262,61 @@ class Alert(db.Model):
 
     def __repr__(self):
         return f"<Alert {self.id}: {self.alert_type}>"
+
+class AnchorOutbox(db.Model):
+    __tablename__ = "anchor_outbox"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    ledger_seq = db.Column(
+        db.Integer,
+        db.ForeignKey("ledger_entries.seq"),
+        nullable=False,
+        unique=True,
+        index=True
+    )
+
+    entry_hash = db.Column(
+        db.String(64),
+        nullable=False
+    )
+
+    status = db.Column(
+        db.String(20),
+        nullable=False,
+        default="PENDING"
+    )
+
+    retry_count = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0
+    )
+
+    last_error = db.Column(
+        db.Text,
+        nullable=True
+    )
+
+    next_retry_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc)
+    )
+
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc)
+    )
+
+    ledger_entry = db.relationship("LedgerEntry")
+
+    def __repr__(self):
+        return f"<AnchorOutbox {self.ledger_seq}: {self.status}>"

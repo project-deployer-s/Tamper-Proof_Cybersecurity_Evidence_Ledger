@@ -1,14 +1,12 @@
+
 from datetime import datetime, timezone, timedelta
 import base64
-from datetime import datetime, timezone
 
 import pytest
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.asymmetric.utils import (
-    decode_dss_signature
-)
+from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 
 from app import create_app
 from app.extensions import db
@@ -37,11 +35,9 @@ class TestConfig:
 
 @pytest.fixture
 def app():
-
     app = create_app(TestConfig)
 
     with app.app_context():
-
         db.create_all()
 
         yield app
@@ -55,6 +51,15 @@ def client(app):
     return app.test_client()
 
 
+@pytest.fixture(autouse=True)
+def mock_external_anchor(monkeypatch):
+    """Prevent tests from making real Supabase requests."""
+    monkeypatch.setattr(
+        "app.services.verification_service.publish_and_update_outbox",
+        lambda seq, entry_hash: (True, None)
+    )
+
+
 # --------------------------------------------------
 # HELPER FUNCTION
 # --------------------------------------------------
@@ -65,7 +70,6 @@ def create_test_message(
     nonce,
     message_text
 ):
-
     # Generate ECDSA P-256 key pair
     private_key = ec.generate_private_key(ec.SECP256R1())
     public_key = private_key.public_key()
@@ -174,13 +178,15 @@ def test_genuine_message_verification(app):
         )
 
         result, error = verify_stored_message(
-            stored_message.id
+            stored_message.id,
+            actor_id=stored_message.sender_user_id
         )
 
         assert error is None
         assert result["verdict"] == "GENUINE"
         assert result["ledger_seq"] is not None
         assert result["alert_id"] is None
+        assert result["verified_by"] == "testuser"
 
 
 # --------------------------------------------------
@@ -205,7 +211,8 @@ def test_tampered_message_detection(app):
 
         # Verify modified message
         result, error = verify_stored_message(
-            stored_message.id
+            stored_message.id,
+            actor_id=stored_message.sender_user_id
         )
 
         assert error is None
@@ -251,7 +258,8 @@ def test_invalid_signature_detection(app):
 
         # Verify message
         result, error = verify_stored_message(
-            stored_message.id
+            stored_message.id,
+            actor_id=stored_message.sender_user_id
         )
 
         assert error is None
@@ -269,6 +277,10 @@ def test_invalid_signature_detection(app):
         assert alert.alert_type == "INVALID_SIGNATURE"
 
 
+# --------------------------------------------------
+# TEST 4: REPLAY ATTACK DETECTION
+# --------------------------------------------------
+
 def test_replay_attack_detection(app):
 
     with app.app_context():
@@ -283,7 +295,8 @@ def test_replay_attack_detection(app):
 
         # 2. Verify the original message first
         first_result, first_error = verify_stored_message(
-            original.id
+            original.id,
+            actor_id=original.sender_user_id
         )
 
         assert first_error is None
@@ -307,7 +320,10 @@ def test_replay_attack_detection(app):
         db.session.commit()
 
         # 4. Verify the replayed message
-        result, error = verify_stored_message(replay.id)
+        result, error = verify_stored_message(
+            replay.id,
+            actor_id=replay.sender_user_id
+        )
 
         # 5. Check replay detection
         assert error is None
@@ -315,14 +331,24 @@ def test_replay_attack_detection(app):
         assert result["alert_id"] is not None
 
         # 6. Confirm HIGH severity alert
-        alert = db.session.get(Alert, result["alert_id"])
+        alert = db.session.get(
+            Alert,
+            result["alert_id"]
+        )
 
         assert alert is not None
         assert alert.severity == "HIGH"
         assert alert.alert_type == "REPLAY"
 
+
+# --------------------------------------------------
+# TEST 5: EXPIRED MESSAGE DETECTION
+# --------------------------------------------------
+
 def test_expired_message_detection(app):
+
     with app.app_context():
+
         stored_message, _ = create_test_message(
             "expireduser",
             "expired@example.com",
@@ -330,20 +356,33 @@ def test_expired_message_detection(app):
             "Old message"
         )
 
-        old_timestamp = datetime.now(timezone.utc) - timedelta(minutes=10)
+        old_timestamp = (
+            datetime.now(timezone.utc) - timedelta(minutes=10)
+        )
 
         stored_message.timestamp = old_timestamp
         stored_message.timestamp_original = old_timestamp.isoformat()
+
         db.session.commit()
 
-        result, error = verify_stored_message(stored_message.id)
+        result, error = verify_stored_message(
+            stored_message.id,
+            actor_id=stored_message.sender_user_id
+        )
 
         assert error is None
         assert result["verdict"] == "EXPIRED"
         assert result["alert_id"] is not None
 
+
+# --------------------------------------------------
+# TEST 6: UNKNOWN SENDER DETECTION
+# --------------------------------------------------
+
 def test_unknown_sender_detection(app):
+
     with app.app_context():
+
         stored_message, _ = create_test_message(
             "knownuser",
             "known@example.com",
@@ -352,16 +391,32 @@ def test_unknown_sender_detection(app):
         )
 
         stored_message.sender = "unknownuser"
+        stored_message.sender = "unknownuser"
+        stored_message.sender = "unknownuser"
+
+        # Change sender identity
+        stored_message.sender = "unknownuser_modified"
+
         db.session.commit()
 
-        result, error = verify_stored_message(stored_message.id)
+        result, error = verify_stored_message(
+            stored_message.id,
+            actor_id=stored_message.sender_user_id
+        )
 
         assert error is None
         assert result["verdict"] == "UNKNOWN_SENDER"
         assert result["alert_id"] is not None
 
+
+# --------------------------------------------------
+# TEST 7: REVOKED KEY DETECTION
+# --------------------------------------------------
+
 def test_revoked_key_detection(app):
+
     with app.app_context():
+
         stored_message, _ = create_test_message(
             "revokeduser",
             "revoked@example.com",
@@ -369,11 +424,18 @@ def test_revoked_key_detection(app):
             "Test message"
         )
 
-        key = db.session.get(PublicKey, stored_message.public_key_id)
+        key = db.session.get(
+            PublicKey,
+            stored_message.public_key_id
+        )
+
         key.is_revoked = True
         db.session.commit()
 
-        result, error = verify_stored_message(stored_message.id)
+        result, error = verify_stored_message(
+            stored_message.id,
+            actor_id=stored_message.sender_user_id
+        )
 
         assert error is None
         assert result["verdict"] == "REVOKED_KEY"

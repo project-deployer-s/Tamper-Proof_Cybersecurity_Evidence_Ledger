@@ -172,3 +172,76 @@ async function getCryptoTestData() {
         signatureBase64: bytesToBase64(signature)
     };
 }
+
+
+function openKeyDatabase() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open("EvidenceLedgerKeys", 1);
+
+        request.onupgradeneeded = () => {
+            const db = request.result;
+
+            if (!db.objectStoreNames.contains("keys")) {
+                db.createObjectStore("keys", { keyPath: "userId" });
+            }
+        };
+
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function savePrivateKey(userId, privateKey) {
+    const db = await openKeyDatabase();
+
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction("keys", "readwrite");
+
+        transaction.objectStore("keys").put({
+            userId: String(userId),
+            privateKey: privateKey,
+            createdAt: new Date().toISOString()
+        });
+
+        transaction.oncomplete = () => {
+            db.close();
+            resolve(true);
+        };
+
+        transaction.onerror = () => {
+            db.close();
+            reject(transaction.error);
+        };
+    });
+}
+
+async function loadPrivateKey(userId) {
+    const db = await openKeyDatabase();
+
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction("keys", "readonly");
+        const request = transaction.objectStore("keys").get(String(userId));
+
+        request.onsuccess = () => {
+            db.close();
+            resolve(request.result?.privateKey || null);
+        };
+
+        request.onerror = () => {
+            db.close();
+            reject(request.error);
+        };
+    });
+}
+
+// Make crypto functions available to other scripts.
+window.generateKeyPair = generateKeyPair;
+window.exportPublicKey = exportPublicKey;
+window.exportPrivateKey = exportPrivateKey;
+window.arrayBufferToBase64 = arrayBufferToBase64;
+window.downloadPrivateKey = downloadPrivateKey;
+window.signPayload = signPayload;
+window.bytesToBase64 = bytesToBase64;
+window.savePrivateKey = savePrivateKey;
+window.loadPrivateKey = loadPrivateKey;
+window.setupKeys = setupKeys;

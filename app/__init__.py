@@ -10,7 +10,7 @@ from app.routes.api import api_bp
 from flask import Flask, jsonify, render_template
 
 from app.config import Config
-from app.extensions import db, migrate, limiter
+from app.extensions import db, migrate, limiter, jwt
 from pages import pages_bp
 
 
@@ -26,17 +26,24 @@ def create_app(config_class=Config):
 
     app.config.from_object(config_class)
 
-    app.config["RATELIMIT_STORAGE_URI"] = os.getenv(
-    "REDIS_URL",
-    "memory://"
-    )
-
     db.init_app(app)
     migrate.init_app(app, db)
     limiter.init_app(app)
+    jwt.init_app(app)
 
     # Register database models
     from app import models
+
+    @app.cli.command("retry-anchors")
+    def retry_anchors_command():
+        """Retry pending external ledger anchors."""
+
+        from app.services.anchor_service import retry_pending_anchors
+
+        with app.app_context():
+            result = retry_pending_anchors()
+
+        print("Anchor retry results:", result)
 
     # Register frontend routes
     app.register_blueprint(pages_bp)
