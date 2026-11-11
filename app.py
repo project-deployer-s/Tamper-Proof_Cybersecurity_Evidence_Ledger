@@ -1,13 +1,6 @@
-from flask import Flask, render_template
-from pages import pages_bp
+from app import create_app
 
-app = Flask(__name__)
-app.register_blueprint(pages_bp)
-
-@app.route("/crypto-test")
-def crypto_test():
-    return render_template("crypto_test.html")
-
+app = create_app()
 
 if __name__ == "__main__":
     app.run(debug=True)

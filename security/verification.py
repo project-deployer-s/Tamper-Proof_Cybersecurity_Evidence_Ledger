@@ -1,3 +1,4 @@
+
 from security.canonical import create_canonical_payload
 from security.ecdsa import verify_signature
 from security.hashing import calculate_sha256
@@ -21,6 +22,7 @@ def verify_message(
     max_age_seconds: int,
     now=None,
     key_revoked: bool = False,
+    attachment_hashes: list[str] | None = None,
 ) -> Verdict:
 
     # 1. Check sender
@@ -49,13 +51,14 @@ def verify_message(
         receiver=receiver,
         timestamp=timestamp,
         nonce=nonce,
-        message=message
+        message=message,
+        attachment_hashes=attachment_hashes
     )
 
     # 6. Recalculate content hash
     actual_content_hash = calculate_sha256(canonical_payload)
 
-    # 7. Detect content tampering
+    # 7. Detect content or attachment metadata tampering
     if actual_content_hash != expected_content_hash:
         return Verdict.TAMPERED
 

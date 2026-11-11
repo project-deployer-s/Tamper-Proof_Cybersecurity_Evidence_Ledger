@@ -65,6 +65,33 @@
 
     let report = '';
 
+    const attachments = m.attachments || [];
+
+const attachmentHTML = attachments.length
+  ? `
+    <div class="attachment-section">
+      <h3>Attachments (${attachments.length})</h3>
+      ${attachments.map(a => `
+        <div class="attachment-item">
+          <div>
+            <strong>${App.esc(a.filename)}</strong>
+            <p class="fine">
+              ${(a.file_size / 1024).toFixed(2)} KB
+            </p>
+          </div>
+          <button
+            class="btn download-attachment"
+            type="button"
+            data-url="${App.esc(a.download_url)}"
+            data-filename="${App.esc(a.filename)}">
+            Download
+          </button>
+        </div>
+      `).join('')}
+    </div>
+  `
+  : '';
+
     if (lastResult && Number(lastResult.message_id) === Number(m.id)) {
       report = `
         <div class="seal">
@@ -83,6 +110,7 @@
       <h2>From ${App.esc(m.sender)}</h2>
 
       <div class="msg-body">${App.esc(m.message)}</div>
+      ${attachmentHTML}
 
       <dl class="facts">
         <dt>Sent</dt>
@@ -153,6 +181,30 @@
   });
 
   $('detail').addEventListener('click', async event => {
+
+    const downloadButton = event.target.closest('.download-attachment');
+
+    if (downloadButton) {
+      downloadButton.disabled = true;
+      downloadButton.textContent = 'Downloading...';
+
+      const result = await api.downloadAttachment(
+        downloadButton.dataset.url,
+        downloadButton.dataset.filename
+      );
+
+      if (!result.ok) {
+        showError(result.error);
+        downloadButton.disabled = false;
+        downloadButton.textContent = 'Download';
+      } else {
+        downloadButton.disabled = false;
+        downloadButton.textContent = 'Download';
+      }
+
+      return;
+    }
+
     const button = event.target.closest('#check-btn');
 
     if (!button) return;

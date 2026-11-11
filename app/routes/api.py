@@ -1,4 +1,8 @@
-from flask import Blueprint, request, jsonify
+import hashlib
+from pathlib import Path
+import json
+
+from flask import Blueprint, request, jsonify, send_file, current_app
 from flask_jwt_extended import (
     create_access_token,
     jwt_required,
@@ -12,7 +16,14 @@ from app.services.demo_service import (
 )
 
 from app.extensions import db
-from app.models import User, Message, PublicKey, LedgerEntry, Alert
+from app.models import (
+    User,
+    Message,
+    MessageAttachment,
+    PublicKey,
+    LedgerEntry,
+    Alert
+)
 
 from app.services.user_service import register_user
 from app.services.key_service import (
@@ -20,6 +31,8 @@ from app.services.key_service import (
     revoke_public_key
 )
 from app.services.message_service import store_message
+from app.services.attachment_service import save_attachment
+
 from app.services.ledger_service import (
     append_ledger_event,
     verify_ledger_integrity
@@ -29,6 +42,7 @@ from app.services.anchor_service import publish_and_update_outbox
 
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
+
 
 
 def get_current_user():
@@ -66,11 +80,27 @@ def serialize_message(message):
         "receiver": message.receiver,
         "message": message.message,
         "timestamp": message.timestamp_original,
+        "nonce": message.nonce,
         "content_hash": message.content_hash,
         "signature": message.signature,
         "public_key_id": message.public_key_id,
         "verification_status": message.verification_status,
-        "created_at": message.created_at.isoformat()
+        "created_at": message.created_at.isoformat(),
+
+        "attachments": [
+            {
+                "id": attachment.id,
+                "filename": attachment.original_filename,
+                "mime_type": attachment.mime_type,
+                "file_size": attachment.file_size,
+                "sha256_hash": attachment.sha256_hash,
+                "download_url": (
+                    f"/api/messages/{message.id}/attachments/"
+                    f"{attachment.id}"
+                )
+            }
+            for attachment in message.attachments
+        ]
     }
 
 
@@ -269,15 +299,37 @@ def revoke_key(user_id, key_id):
 # 5. SEND MESSAGE
 # -----------------------------------------
 
+
 @api_bp.route("/messages", methods=["POST"])
 @jwt_required()
 def submit_message():
+
     current_user = get_current_user()
 
     if not current_user:
         return jsonify({"error": "User not found"}), 404
 
-    data = request.get_json(silent=True) or {}
+    saved_attachments = []
+
+    def cleanup_saved_files():
+        upload_dir = Path(current_app.instance_path) / "attachments"
+
+        for attachment in saved_attachments:
+            file_path = upload_dir / attachment.stored_filename
+            try:
+                file_path.unlink(missing_ok=True)
+            except OSError:
+                current_app.logger.exception(
+                    "Failed to remove orphaned attachment"
+                )
+
+    # Support JSON and multipart file uploads.
+    if request.mimetype == "multipart/form-data":
+        data = request.form.to_dict()
+        uploaded_files = request.files.getlist("attachments")
+    else:
+        data = request.get_json(silent=True) or {}
+        uploaded_files = []
 
     required = [
         "public_key_id",
@@ -305,10 +357,29 @@ def submit_message():
 
     try:
         key_id = int(data["public_key_id"])
-    except (ValueError, TypeError):
-        return jsonify({"error": "Invalid public key ID"}), 400
+        attachment_hashes = json.loads(
+            data.get("attachment_hashes", "[]")
+        )
 
-    try:
+        if not isinstance(attachment_hashes, list):
+            raise ValueError("Invalid attachment hashes")
+
+        if len(attachment_hashes) != len(uploaded_files):
+            return jsonify({
+                "error": "Attachment hash count does not match uploaded files"
+            }), 400
+
+        if any(
+            not isinstance(value, str)
+            or len(value) != 64
+            or any(c not in "0123456789abcdef" for c in value)
+            for value in attachment_hashes
+        ):
+            return jsonify({
+                "error": "Invalid attachment hash"
+            }), 400
+
+        # Store signed message.
         message, error = store_message(
             sender_user_id=current_user.id,
             public_key_id=key_id,
@@ -323,8 +394,36 @@ def submit_message():
 
         if error:
             db.session.rollback()
+            cleanup_saved_files()
             return jsonify({"error": error}), 400
 
+        # Store attachments and independently calculate their hashes.
+        for uploaded_file in uploaded_files:
+            attachment, error = save_attachment(
+                uploaded_file,
+                message.id
+            )
+
+            if error:
+                db.session.rollback()
+                cleanup_saved_files()
+                return jsonify({"error": error}), 400
+
+            saved_attachments.append(attachment)
+
+        actual_hashes = sorted(
+            attachment.sha256_hash
+            for attachment in saved_attachments
+        )
+
+        if actual_hashes != sorted(attachment_hashes):
+            db.session.rollback()
+            cleanup_saved_files()
+            return jsonify({
+                "error": "Attachment integrity hash mismatch"
+            }), 400
+
+        # Record message and attachment information in ledger.
         entry, error = append_ledger_event(
             event_type="SENT",
             message_id=message.id,
@@ -332,19 +431,29 @@ def submit_message():
             detail={
                 "sender": message.sender,
                 "receiver": message.receiver,
-                "content_hash": message.content_hash
+                "content_hash": message.content_hash,
+                "attachment_hashes": actual_hashes
             },
             commit=False
         )
 
         if error:
             db.session.rollback()
+            cleanup_saved_files()
             return jsonify({"error": error}), 500
 
         db.session.commit()
 
+    except (ValueError, TypeError, json.JSONDecodeError):
+        db.session.rollback()
+        cleanup_saved_files()
+        return jsonify({
+            "error": "Invalid message or attachment data"
+        }), 400
+
     except Exception:
         db.session.rollback()
+        cleanup_saved_files()
         return jsonify({
             "error": "Message submission failed"
         }), 500
@@ -363,6 +472,7 @@ def submit_message():
         "ledger_seq": entry.seq,
         "anchor_status": "published" if success else "pending"
     }), 201
+
 
 
 # -----------------------------------------
@@ -593,3 +703,69 @@ def demo_ledger_tampering():
         return jsonify({
             "error": "Ledger tampering simulation failed"
         }), 500
+
+# -----------------------------------------
+# 14. SECURE ATTACHMENT DOWNLOAD
+# -----------------------------------------
+
+@api_bp.route(
+    "/messages/<int:message_id>/attachments/<int:attachment_id>",
+    methods=["GET"]
+)
+@jwt_required()
+def download_attachment(message_id, attachment_id):
+
+    current_user = get_current_user()
+
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
+
+    # Retrieve message and attachment.
+    message = db.session.get(Message, message_id)
+    attachment = db.session.get(
+        MessageAttachment, attachment_id
+    )
+
+    if not message or not attachment:
+        return jsonify({"error": "Attachment not found"}), 404
+
+    if attachment.message_id != message.id:
+        return jsonify({"error": "Attachment not found"}), 404
+
+    # Allow only the sender or receiver.
+    receiver = User.query.filter_by(
+        username=message.receiver
+    ).first()
+
+    is_sender = current_user.id == message.sender_user_id
+    is_receiver = (
+        receiver is not None
+        and current_user.id == receiver.id
+    )
+
+    if not (is_sender or is_receiver):
+        return jsonify({"error": "Access forbidden"}), 403
+
+    # Locate the server-generated stored filename.
+    upload_dir = Path(current_app.instance_path) / "attachments"
+    file_path = upload_dir / attachment.stored_filename
+
+    if not file_path.is_file():
+        return jsonify({"error": "Stored attachment not found"}), 404
+
+    # Verify file integrity before download.
+    actual_hash = hashlib.sha256(
+        file_path.read_bytes()
+    ).hexdigest()
+
+    if actual_hash != attachment.sha256_hash:
+        return jsonify({
+            "error": "Attachment integrity check failed"
+        }), 409
+
+    return send_file(
+        file_path,
+        mimetype=attachment.mime_type,
+        as_attachment=True,
+        download_name=attachment.original_filename
+    )

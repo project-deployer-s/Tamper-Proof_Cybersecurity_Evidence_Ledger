@@ -19,14 +19,25 @@
   };
 
   function formatTime(value) {
-    if (!value) return 'Unknown time';
+  if (!value) return 'Unknown time';
 
-    const date = new Date(value);
+  const date = new Date(value);
 
-    return Number.isNaN(date.getTime())
-      ? 'Unknown time'
-      : date.toLocaleString();
+  if (Number.isNaN(date.getTime())) {
+    return 'Unknown time';
   }
+
+  return date.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  }) + ' IST';
+}
 
   function summarize(entry) {
     const detail = entry.detail || {};
@@ -69,12 +80,12 @@
         <div class="hashes">
           <div>
             <span>hash</span>
-            ${App.esc(App.short(entry.entry_hash, 12))}
+            <span class="full-hash">${App.esc(entry.entry_hash)}</span>
           </div>
 
           <div>
             <span>prev</span>
-            ${App.esc(App.short(entry.prev_hash, 12))}
+            <span class="full-hash">${App.esc(entry.prev_hash)}</span>
           </div>
         </div>
       </li>
@@ -100,8 +111,8 @@
     $('summary').innerHTML =
       entries.length +
       ' entries. Latest hash: <span class="mono">' +
-      App.esc(latest.entry_hash.slice(0, 24)) +
-      '…</span>';
+      App.esc(latest.entry_hash) +
+      '</span>';
 
     chain.innerHTML = entries.map((entry, index) => {
       const link = entries[index + 1];

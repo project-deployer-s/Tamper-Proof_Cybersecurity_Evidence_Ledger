@@ -23,8 +23,30 @@
     String(value === undefined || value === null ? '' : value).replace(/[&<>"']/g, (c) =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-  App.fmtTime = (ts) =>
-    new Date(ts * 1000).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  App.fmtTime = (ts) => {
+  if (!ts) return 'Unknown time';
+
+  let date;
+
+  if (typeof ts === 'number' || /^\d+(\.\d+)?$/.test(String(ts))) {
+    const value = Number(ts);
+    date = new Date(value < 1e12 ? value * 1000 : value);
+  } else {
+    date = new Date(ts);
+  }
+
+  if (Number.isNaN(date.getTime())) return 'Unknown time';
+
+  return date.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  }) + ' IST';
+};
 
   App.short = (hash, n) => (hash ? hash.slice(0, n || 10) + '…' : '');
 

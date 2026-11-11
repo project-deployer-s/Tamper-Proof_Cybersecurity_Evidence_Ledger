@@ -14,43 +14,50 @@ const api = {
     return localStorage.getItem('evidence_token');
   },
 
-  async request(endpoint, options = {}) {
-    const headers = {
-      'Content-Type': 'application/json',
-      ...(options.headers || {})
-    };
 
-    const token = this.getToken();
+async request(endpoint, options = {}) {
+  const headers = { ...(options.headers || {}) };
 
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
+  const isFormData = options.body instanceof FormData;
 
-    try {
-      const response = await fetch(`${API_BASE}${endpoint}`, {
-        ...options,
-        headers
-      });
+  // Let the browser set the multipart boundary automatically.
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
 
-      const data = await response.json().catch(() => ({}));
+  const token = this.getToken();
 
-      if (!response.ok) {
-  return {
-    ok: false,
-    error: data.error || data.message || 'Request failed',
-    data,
-    status: response.status
-  };
-}
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
 
-      return { ok: true, data };
-    } catch {
+  try {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
       return {
         ok: false,
-        error: 'Unable to connect to the server.'
+        error: data.error || data.message || 'Request failed',
+        data,
+        status: response.status
       };
     }
-  },
+
+    return { ok: true, data };
+
+  } catch {
+    return {
+      ok: false,
+      error: 'Unable to connect to the server.'
+    };
+  }
+},
+
 
   async register(username, email, password) {
     const result = await this.request('/users', {
@@ -130,16 +137,63 @@ const api = {
     return this.request(`/users/${user.id}/keys`);
   },
 
-  async sendMessage(messageData) {
+
+async sendMessage(messageData) {
+  if (messageData instanceof FormData) {
     return this.request('/messages', {
       method: 'POST',
-      body: JSON.stringify(messageData)
+      body: messageData
     });
-  },
+  }
+
+  return this.request('/messages', {
+    method: 'POST',
+    body: JSON.stringify(messageData)
+  });
+},
+
 
   async getInbox() {
     return this.request('/messages/inbox');
   },
+
+  async downloadAttachment(url, filename) {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${this.getToken()}`
+      }
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      return {
+        ok: false,
+        error: data.error || 'Download failed'
+      };
+    }
+
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    URL.revokeObjectURL(objectUrl);
+
+    return { ok: true };
+
+  } catch {
+    return {
+      ok: false,
+      error: 'Unable to download attachment.'
+    };
+  }
+},
 
   async getSentMessages() {
     return this.request('/messages/sent');

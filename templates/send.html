@@ -30,9 +30,19 @@
             <p class="hint"><span id="count">0</span> of 2000 characters</p>
           </div>
           <div class="field">
-            <label for="file">Attachment</label>
-            <input type="text" id="file" value="Attachments arrive in a later version" disabled>
-          </div>
+  <label for="attachments">Attachments</label>
+  <input
+    type="file"
+    id="attachments"
+    name="attachments"
+    multiple
+    accept=".pdf,.txt,.csv,.png,.jpg,.jpeg,.docx"
+  >
+  <p class="hint">
+    Maximum 10 MB per file. Allowed: PDF, TXT, CSV, PNG, JPG, JPEG, DOCX.
+  </p>
+  <div id="attachment-list"></div>
+</div>
           <p class="error-text" id="send-error" role="alert" hidden></p>
           <button class="btn" type="submit" id="send-btn">Sign and send</button>
         </form>

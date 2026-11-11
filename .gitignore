@@ -20,3 +20,4 @@ instance/
 
 # Testing
 .pytest_cache/
+anchor_retry.log

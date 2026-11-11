@@ -320,3 +320,56 @@ class AnchorOutbox(db.Model):
 
     def __repr__(self):
         return f"<AnchorOutbox {self.ledger_seq}: {self.status}>"
+
+
+class MessageAttachment(db.Model):
+    __tablename__ = "message_attachments"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    message_id = db.Column(
+        db.Integer,
+        db.ForeignKey("messages.id"),
+        nullable=False,
+        index=True
+    )
+
+    original_filename = db.Column(
+        db.String(255),
+        nullable=False
+    )
+
+    stored_filename = db.Column(
+        db.String(255),
+        nullable=False,
+        unique=True
+    )
+
+    mime_type = db.Column(
+        db.String(120),
+        nullable=False
+    )
+
+    file_size = db.Column(
+        db.Integer,
+        nullable=False
+    )
+
+    sha256_hash = db.Column(
+        db.String(64),
+        nullable=False
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc)
+    )
+
+    message = db.relationship(
+        "Message",
+        backref=db.backref("attachments", cascade="all, delete-orphan")
+    )
+
+    def __repr__(self):
+        return f"<MessageAttachment {self.id}: {self.original_filename}>"

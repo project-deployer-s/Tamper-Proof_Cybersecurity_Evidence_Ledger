@@ -1,7 +1,11 @@
 
 import base64
 import binascii
+import hashlib
 from datetime import timezone
+from pathlib import Path
+
+from flask import current_app
 
 from cryptography.exceptions import UnsupportedAlgorithm
 from cryptography.hazmat.primitives import serialization
@@ -19,7 +23,11 @@ from security.verdicts import Verdict
 from security.signature_format import raw_ecdsa_to_der
 
 
-def verify_stored_message(message_id, actor_id, max_age_seconds=300):
+def verify_stored_message(
+    message_id,
+    actor_id,
+    max_age_seconds=300
+):
 
     try:
         # 1. Retrieve message
@@ -28,7 +36,7 @@ def verify_stored_message(message_id, actor_id, max_age_seconds=300):
         if not message:
             return None, "Message not found"
 
-        # 2. Retrieve actual verifier
+        # 2. Retrieve verifier
         actor_user = db.session.get(User, actor_id)
 
         if not actor_user:
@@ -127,7 +135,13 @@ def verify_stored_message(message_id, actor_id, max_age_seconds=300):
                 tzinfo=timezone.utc
             )
 
-        # 12. Run verification engine
+        # 12. Retrieve attachment hashes
+        attachment_hashes = sorted(
+            attachment.sha256_hash
+            for attachment in message.attachments
+        )
+
+        # 13. Run cryptographic verification
         verdict = verify_message(
             public_key=public_key,
             signature=der_signature,
@@ -141,13 +155,47 @@ def verify_stored_message(message_id, actor_id, max_age_seconds=300):
             sender_known=sender_known,
             used_nonces=used_nonces,
             max_age_seconds=max_age_seconds,
-            key_revoked=public_key_record.is_revoked
+            key_revoked=public_key_record.is_revoked,
+            attachment_hashes=attachment_hashes or None
         )
 
-        # 13. Update verification status
+        # 14. Verify actual stored attachment files
+                # 14. Verify actual stored attachment files
+        if verdict == Verdict.GENUINE and message.attachments:
+
+            upload_dir = (
+                Path(current_app.instance_path) / "attachments"
+            )
+
+            for attachment in message.attachments:
+
+                file_path = (
+                    upload_dir / attachment.stored_filename
+                )
+
+                if not file_path.is_file():
+                    verdict = Verdict.TAMPERED
+                    break
+
+                hasher = hashlib.sha256()
+
+                with file_path.open("rb") as attachment_file:
+                    for chunk in iter(
+                        lambda: attachment_file.read(1024 * 1024),
+                        b""
+                    ):
+                        hasher.update(chunk)
+
+                actual_hash = hasher.hexdigest()
+
+                if actual_hash != attachment.sha256_hash:
+                    verdict = Verdict.TAMPERED
+                    break
+
+        # 15. Update verification status
         message.verification_status = verdict.value
 
-        # 14. Create ledger event with actual verifier identity
+        # 16. Create ledger event
         ledger_entry, error = append_ledger_event(
             "VERIFIED",
             message_id=message.id,
@@ -163,10 +211,11 @@ def verify_stored_message(message_id, actor_id, max_age_seconds=300):
             db.session.rollback()
             return None, error or "Failed to record verification event"
 
-        # 15. Create alert for non-genuine messages
+        # 17. Create alert for non-genuine messages
         alert = None
 
         if verdict != Verdict.GENUINE:
+
             alert, error = create_alert(
                 ledger_seq=ledger_entry.seq,
                 alert_type=verdict.value,
@@ -178,10 +227,10 @@ def verify_stored_message(message_id, actor_id, max_age_seconds=300):
                 db.session.rollback()
                 return None, error or "Failed to create alert"
 
-        # 16. Commit local changes
+        # 18. Commit local changes
         db.session.commit()
 
-        # 17. Publish external anchor
+        # 19. Publish external anchor
         success, anchor_error = publish_and_update_outbox(
             ledger_entry.seq,
             ledger_entry.entry_hash
@@ -193,7 +242,7 @@ def verify_stored_message(message_id, actor_id, max_age_seconds=300):
                 anchor_error
             )
 
-        # 18. Return result
+        # 20. Return result
         return {
             "message_id": message.id,
             "verdict": verdict.value,
