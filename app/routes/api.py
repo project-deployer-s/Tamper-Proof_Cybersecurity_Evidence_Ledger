@@ -1,6 +1,6 @@
 import hashlib
-from pathlib import Path
 import json
+from io import BytesIO
 
 from flask import Blueprint, request, jsonify, send_file, current_app
 from flask_jwt_extended import (
@@ -32,6 +32,7 @@ from app.services.key_service import (
 )
 from app.services.message_service import store_message
 from app.services.attachment_service import save_attachment
+from app.services.storage_service import delete_file, download_file
 
 from app.services.ledger_service import (
     append_ledger_event,
@@ -261,6 +262,7 @@ def get_user_keys(user_id):
         "keys": [
             {
                 "id": key.id,
+                "public_key": key.public_key,
                 "algorithm": key.algorithm,
                 "is_revoked": key.is_revoked,
                 "created_at": key.created_at.isoformat(),
@@ -312,15 +314,14 @@ def submit_message():
     saved_attachments = []
 
     def cleanup_saved_files():
-        upload_dir = Path(current_app.instance_path) / "attachments"
+        """Remove uploaded objects if message submission fails."""
 
         for attachment in saved_attachments:
-            file_path = upload_dir / attachment.stored_filename
             try:
-                file_path.unlink(missing_ok=True)
-            except OSError:
+                delete_file(attachment.stored_filename)
+            except Exception:
                 current_app.logger.exception(
-                    "Failed to remove orphaned attachment"
+                    "Failed to remove orphaned Supabase attachment"
                 )
 
     # Support JSON and multipart file uploads.
@@ -746,25 +747,31 @@ def download_attachment(message_id, attachment_id):
     if not (is_sender or is_receiver):
         return jsonify({"error": "Access forbidden"}), 403
 
-    # Locate the server-generated stored filename.
-    upload_dir = Path(current_app.instance_path) / "attachments"
-    file_path = upload_dir / attachment.stored_filename
-
-    if not file_path.is_file():
+    # Download the object from private Supabase Storage.
+    try:
+        file_content = download_file(attachment.stored_filename)
+    except FileNotFoundError:
         return jsonify({"error": "Stored attachment not found"}), 404
+    except Exception:
+        current_app.logger.exception(
+            "Failed to download attachment from Supabase Storage"
+        )
+        return jsonify({"error": "Attachment storage is unavailable"}), 502
 
-    # Verify file integrity before download.
-    actual_hash = hashlib.sha256(
-        file_path.read_bytes()
-    ).hexdigest()
+    # Verify SHA-256 integrity before download.
+    actual_hash = hashlib.sha256(file_content).hexdigest()
 
     if actual_hash != attachment.sha256_hash:
+        current_app.logger.error(
+            "Attachment integrity check failed for attachment ID %s",
+            attachment.id
+        )
         return jsonify({
             "error": "Attachment integrity check failed"
         }), 409
 
     return send_file(
-        file_path,
+        BytesIO(file_content),
         mimetype=attachment.mime_type,
         as_attachment=True,
         download_name=attachment.original_filename

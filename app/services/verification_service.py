@@ -3,7 +3,6 @@ import base64
 import binascii
 import hashlib
 from datetime import timezone
-from pathlib import Path
 
 from flask import current_app
 
@@ -17,6 +16,7 @@ from app.models import User, PublicKey, Message
 from app.services.alert_service import create_alert
 from app.services.ledger_service import append_ledger_event
 from app.services.anchor_service import publish_and_update_outbox
+from app.services.storage_service import download_file
 
 from security.verification import verify_message
 from security.verdicts import Verdict
@@ -159,34 +159,28 @@ def verify_stored_message(
             attachment_hashes=attachment_hashes or None
         )
 
-        # 14. Verify actual stored attachment files
-                # 14. Verify actual stored attachment files
+        # 14. Verify actual attachment files in private Supabase Storage.
         if verdict == Verdict.GENUINE and message.attachments:
 
-            upload_dir = (
-                Path(current_app.instance_path) / "attachments"
-            )
-
             for attachment in message.attachments:
-
-                file_path = (
-                    upload_dir / attachment.stored_filename
-                )
-
-                if not file_path.is_file():
+                try:
+                    file_content = download_file(
+                        attachment.stored_filename
+                    )
+                except FileNotFoundError:
                     verdict = Verdict.TAMPERED
                     break
+                except Exception:
+                    current_app.logger.exception(
+                        "Attachment storage verification failed for ID %s",
+                        attachment.id
+                    )
+                    db.session.rollback()
+                    return None, "Attachment storage verification unavailable"
 
-                hasher = hashlib.sha256()
-
-                with file_path.open("rb") as attachment_file:
-                    for chunk in iter(
-                        lambda: attachment_file.read(1024 * 1024),
-                        b""
-                    ):
-                        hasher.update(chunk)
-
-                actual_hash = hasher.hexdigest()
+                actual_hash = hashlib.sha256(
+                    file_content
+                ).hexdigest()
 
                 if actual_hash != attachment.sha256_hash:
                     verdict = Verdict.TAMPERED
