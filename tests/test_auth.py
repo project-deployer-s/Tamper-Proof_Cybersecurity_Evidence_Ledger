@@ -1,9 +1,19 @@
 
-from app.models import Message
+import base64
 import pytest
+
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.utils import (
+    decode_dss_signature
+)
 
 from app import create_app
 from app.extensions import db
+from app.models import Message
+
+from security.canonical import create_canonical_payload
+from security.ecdsa import generate_key_pair, sign_data
+from security.hashing import calculate_sha256
 
 
 class TestConfig:
@@ -50,6 +60,73 @@ def login_user(client, email):
             "password": "TestPassword123"
         }
     )
+
+
+def create_signed_test_message(
+    private_key,
+    sender,
+    receiver,
+    message
+):
+    timestamp = "2026-11-09T10:00:00Z"
+    nonce = "test-nonce"
+
+    canonical_payload = create_canonical_payload(
+        sender=sender,
+        receiver=receiver,
+        timestamp=timestamp,
+        nonce=nonce,
+        message=message
+    )
+
+    content_hash = calculate_sha256(canonical_payload)
+
+    der_signature = sign_data(
+        private_key,
+        canonical_payload
+    )
+
+    r, s = decode_dss_signature(der_signature)
+
+    raw_signature = (
+        r.to_bytes(32, byteorder="big") +
+        s.to_bytes(32, byteorder="big")
+    )
+
+    return {
+        "sender": sender,
+        "receiver": receiver,
+        "timestamp": timestamp,
+        "nonce": nonce,
+        "message": message,
+        "content_hash": content_hash,
+        "signature": base64.b64encode(
+            raw_signature
+        ).decode("ascii")
+    }
+
+
+def register_test_key(client, user_id, token):
+    private_key, public_key = generate_key_pair()
+
+    public_key_der = public_key.public_bytes(
+        encoding=serialization.Encoding.DER,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+
+    public_key_base64 = base64.b64encode(
+        public_key_der
+    ).decode("ascii")
+
+    response = client.post(
+        f"/api/users/{user_id}/keys",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"public_key": public_key_base64}
+    )
+
+    assert response.status_code == 201
+
+    return private_key, response.json["key"]["id"]
 
 
 def test_successful_login(client):
@@ -125,17 +202,27 @@ def test_user_cannot_send_message_using_another_users_key(client):
     register_user(client, "user1", "user1@test.com")
     register_user(client, "user2", "user2@test.com")
 
-    login_response = login_user(client, "user1@test.com")
-    token = login_response.json["access_token"]
+    # Register a key belonging to user2.
+    user2_login = login_user(client, "user2@test.com")
+    user2_token = user2_login.json["access_token"]
+
+    _, key_id = register_test_key(
+        client, 2, user2_token
+    )
+
+    # User1 attempts to use user2's key.
+    user1_login = login_user(client, "user1@test.com")
+    user1_token = user1_login.json["access_token"]
 
     response = client.post(
         "/api/messages",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={
+            "Authorization": f"Bearer {user1_token}"
+        },
         json={
-            "sender_user_id": 1,
-            "public_key_id": 999,
             "sender": "user1",
             "receiver": "user2",
+            "public_key_id": key_id,
             "timestamp": "2026-11-09T10:00:00Z",
             "nonce": "test-nonce",
             "message": "Test message",
@@ -145,7 +232,7 @@ def test_user_cannot_send_message_using_another_users_key(client):
     )
 
     assert response.status_code == 400
-    assert response.json["error"] == "Invalid public key"
+    assert response.json["error"] == "Invalid or revoked signing key"
 
 
 def test_message_is_rolled_back_when_ledger_creation_fails(
@@ -157,18 +244,29 @@ def test_message_is_rolled_back_when_ledger_creation_fails(
     login_response = login_user(client, "user1@test.com")
     token = login_response.json["access_token"]
 
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
 
-    key_response = client.post(
-        "/api/users/1/keys",
-        headers=headers,
-        json={"public_key": "test-public-key"}
+    # Register a valid ECDSA P-256 key.
+    private_key, key_id = register_test_key(
+        client, 1, token
     )
 
-    assert key_response.status_code == 201
+    # Generate a correctly signed message.
+    signed_data = create_signed_test_message(
+        private_key,
+        "user1",
+        "user2",
+        "Test message"
+    )
 
-    key_id = key_response.json["key"]["id"]
+    payload = {
+        "public_key_id": key_id,
+        **signed_data
+    }
 
+    # Simulate ledger creation failure.
     def fail_ledger(**kwargs):
         return None, "Simulated ledger failure"
 
@@ -180,20 +278,11 @@ def test_message_is_rolled_back_when_ledger_creation_fails(
     response = client.post(
         "/api/messages",
         headers=headers,
-        json={
-            "sender_user_id": 1,
-            "public_key_id": key_id,
-            "sender": "user1",
-            "receiver": "user2",
-            "timestamp": "2026-11-09T10:00:00Z",
-            "nonce": "test-nonce",
-            "message": "Test message",
-            "content_hash": "test-hash",
-            "signature": "test-signature"
-        }
+        json=payload
     )
 
     assert response.status_code == 500
 
+    # Confirm the database transaction was rolled back.
     with client.application.app_context():
         assert Message.query.count() == 0

@@ -1,4 +1,3 @@
-
 import json
 
 
@@ -8,7 +7,8 @@ def create_canonical_payload(
     timestamp,
     nonce,
     message,
-    attachment_hashes=None
+    attachment_hashes=None,
+    expiry_seconds=None
 ):
     payload = {
         "sender": sender,
@@ -18,9 +18,13 @@ def create_canonical_payload(
         "message": message
     }
 
-    # Include attachment hashes only when attachments exist.
     if attachment_hashes:
         payload["attachment_hashes"] = sorted(attachment_hashes)
+
+    # Include expiry only for messages with a finite duration.
+    # Omitting it preserves the canonical format of old messages.
+    if expiry_seconds is not None:
+        payload["expiry_seconds"] = expiry_seconds
 
     canonical_json = json.dumps(
         payload,

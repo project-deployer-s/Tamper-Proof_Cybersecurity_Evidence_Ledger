@@ -23,21 +23,23 @@ def verify_message(
     now=None,
     key_revoked: bool = False,
     attachment_hashes: list[str] | None = None,
+    expiry_seconds: int | None = None,
 ) -> Verdict:
 
-    # 1. Check sender
+    # 1. Check sender.
     if not sender_known:
         return Verdict.UNKNOWN_SENDER
 
-    # 2. Check key status
+    # 2. Check key status.
     if key_revoked:
         return Verdict.REVOKED_KEY
 
-    # 3. Check replay
+    # 3. Check replay.
     if is_nonce_reused(nonce, used_nonces):
         return Verdict.REPLAY
 
-    # 4. Check expiry
+    # 4. Check security freshness.
+    # This remains independent of message availability expiry.
     if is_expired(
         timestamp_datetime,
         max_age_seconds,
@@ -45,24 +47,25 @@ def verify_message(
     ):
         return Verdict.EXPIRED
 
-    # 5. Recreate canonical payload
+    # 5. Recreate canonical payload.
     canonical_payload = create_canonical_payload(
         sender=sender,
         receiver=receiver,
         timestamp=timestamp,
         nonce=nonce,
         message=message,
-        attachment_hashes=attachment_hashes
+        attachment_hashes=attachment_hashes,
+        expiry_seconds=expiry_seconds
     )
 
-    # 6. Recalculate content hash
+    # 6. Recalculate content hash.
     actual_content_hash = calculate_sha256(canonical_payload)
 
-    # 7. Detect content or attachment metadata tampering
+    # 7. Detect content or metadata tampering.
     if actual_content_hash != expected_content_hash:
         return Verdict.TAMPERED
 
-    # 8. Verify digital signature
+    # 8. Verify digital signature.
     if not verify_signature(
         public_key,
         canonical_payload,
@@ -70,5 +73,5 @@ def verify_message(
     ):
         return Verdict.INVALID_SIGNATURE
 
-    # 9. Everything passed
+    # 9. Everything passed.
     return Verdict.GENUINE

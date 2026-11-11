@@ -18,6 +18,23 @@
     App.toast(message || 'Something went wrong.', 'bad');
   }
 
+  function isExpired(message) {
+    if (typeof message.is_expired === 'boolean') {
+      return message.is_expired;
+    }
+
+    return Boolean(
+      message.expires_at &&
+      Date.now() >= new Date(message.expires_at).getTime()
+    );
+  }
+
+  function formatExpiry(message) {
+    if (!message.expires_at) return 'Never expires';
+
+    return App.fmtTime(message.expires_at);
+  }
+
   function renderList() {
     if (!messages.length) {
       $('list').innerHTML =
@@ -29,10 +46,13 @@
       return;
     }
 
-    $('check-all').disabled =
-      !messages.some(m => m.verification_status === 'PENDING');
+    $('check-all').disabled = !messages.some(
+      m => !isExpired(m) &&
+      m.verification_status === 'PENDING'
+    );
 
     $('list').innerHTML = messages.map(m => {
+      const expired = isExpired(m);
       const verdict = m.verification_status || 'PENDING';
 
       return `
@@ -41,12 +61,21 @@
             class="msg-row"
             data-id="${Number(m.id)}"
             ${Number(m.id) === selectedId ? 'aria-current="true"' : ''}>
+
             <span class="top">
               <span class="from">${App.esc(m.sender)}</span>
               <span class="when">${App.fmtTime(m.timestamp)}</span>
             </span>
-            <span class="preview">${App.esc(m.message)}</span>
-            ${App.badge(verdict)}
+
+            <span class="preview">
+              ${expired
+                ? 'Message Expired'
+                : App.esc(m.message)}
+            </span>
+
+            ${expired
+              ? '<span class="hint">Expired</span>'
+              : App.badge(verdict)}
           </button>
         </li>
       `;
@@ -63,36 +92,42 @@
       return;
     }
 
-    let report = '';
-
+    const expired = isExpired(m);
     const attachments = m.attachments || [];
 
-const attachmentHTML = attachments.length
-  ? `
-    <div class="attachment-section">
-      <h3>Attachments (${attachments.length})</h3>
-      ${attachments.map(a => `
-        <div class="attachment-item">
-          <div>
-            <strong>${App.esc(a.filename)}</strong>
-            <p class="fine">
-              ${(a.file_size / 1024).toFixed(2)} KB
-            </p>
-          </div>
-          <button
-            class="btn download-attachment"
-            type="button"
-            data-url="${App.esc(a.download_url)}"
-            data-filename="${App.esc(a.filename)}">
-            Download
-          </button>
-        </div>
-      `).join('')}
-    </div>
-  `
-  : '';
+    const attachmentHTML = !expired && attachments.length
+      ? `
+        <div class="attachment-section">
+          <h3>Attachments (${attachments.length})</h3>
 
-    if (lastResult && Number(lastResult.message_id) === Number(m.id)) {
+          ${attachments.map(a => `
+            <div class="attachment-item">
+              <div>
+                <strong>${App.esc(a.filename)}</strong>
+                <p class="fine">
+                  ${(a.file_size / 1024).toFixed(2)} KB
+                </p>
+              </div>
+
+              <button
+                class="btn download-attachment"
+                type="button"
+                data-url="${App.esc(a.download_url)}"
+                data-filename="${App.esc(a.filename)}">
+                Download
+              </button>
+            </div>
+          `).join('')}
+        </div>
+      `
+      : '';
+
+    let report = '';
+
+    if (
+      lastResult &&
+      Number(lastResult.message_id) === Number(m.id)
+    ) {
       report = `
         <div class="seal">
           <div class="seal-title">
@@ -106,15 +141,32 @@ const attachmentHTML = attachments.length
       `;
     }
 
+    const messageContent = expired
+      ? `
+        <div class="seal" role="status">
+          <div class="seal-title">Message Expired</div>
+          <p>
+            This message is no longer available.
+            Its cryptographic evidence remains preserved in the ledger.
+          </p>
+        </div>
+      `
+      : `
+        <div class="msg-body">${App.esc(m.message)}</div>
+        ${attachmentHTML}
+      `;
+
     $('detail').innerHTML = `
       <h2>From ${App.esc(m.sender)}</h2>
 
-      <div class="msg-body">${App.esc(m.message)}</div>
-      ${attachmentHTML}
+      ${messageContent}
 
       <dl class="facts">
         <dt>Sent</dt>
         <dd>${App.fmtTime(m.timestamp)}</dd>
+
+        <dt>Availability</dt>
+        <dd>${App.esc(formatExpiry(m))}</dd>
 
         <dt>One-time number</dt>
         <dd class="mono">${App.esc(m.nonce)}</dd>
@@ -126,12 +178,14 @@ const attachmentHTML = attachments.length
         <dd>${App.badge(m.verification_status || 'PENDING')}</dd>
       </dl>
 
-      <div class="row" style="margin-bottom:16px">
-        <button class="btn" type="button" id="check-btn"
-          data-id="${Number(m.id)}">
-          Verify message
-        </button>
-      </div>
+      ${expired ? '' : `
+        <div class="row" style="margin-bottom:16px">
+          <button class="btn" type="button" id="check-btn"
+            data-id="${Number(m.id)}">
+            Verify message
+          </button>
+        </div>
+      `}
 
       <div id="report">${report}</div>
     `;
@@ -181,8 +235,8 @@ const attachmentHTML = attachments.length
   });
 
   $('detail').addEventListener('click', async event => {
-
-    const downloadButton = event.target.closest('.download-attachment');
+    const downloadButton =
+      event.target.closest('.download-attachment');
 
     if (downloadButton) {
       downloadButton.disabled = true;
@@ -195,12 +249,10 @@ const attachmentHTML = attachments.length
 
       if (!result.ok) {
         showError(result.error);
-        downloadButton.disabled = false;
-        downloadButton.textContent = 'Download';
-      } else {
-        downloadButton.disabled = false;
-        downloadButton.textContent = 'Download';
       }
+
+      downloadButton.disabled = false;
+      downloadButton.textContent = 'Download';
 
       return;
     }
@@ -209,6 +261,15 @@ const attachmentHTML = attachments.length
 
     if (!button) return;
 
+    const selected = messages.find(
+      m => Number(m.id) === Number(button.dataset.id)
+    );
+
+    if (!selected || isExpired(selected)) {
+      showError('This message has expired.');
+      return;
+    }
+
     button.disabled = true;
     button.textContent = 'Verifying...';
 
@@ -216,7 +277,9 @@ const attachmentHTML = attachments.length
       await runCheck(Number(button.dataset.id));
       await refresh();
       renderDetail();
+
       App.toast('Verification completed.');
+
     } catch (error) {
       showError(error.message);
       button.disabled = false;
@@ -230,7 +293,8 @@ const attachmentHTML = attachments.length
     button.disabled = true;
 
     const pending = messages.filter(
-      m => m.verification_status === 'PENDING'
+      m => !isExpired(m) &&
+      m.verification_status === 'PENDING'
     );
 
     let checked = 0;
@@ -252,6 +316,7 @@ const attachmentHTML = attachments.length
         `Verified ${checked} message(s). ${failed} failed.`,
         failed ? 'bad' : 'success'
       );
+
     } catch (error) {
       showError(error.message);
       button.disabled = false;

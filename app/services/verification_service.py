@@ -156,7 +156,8 @@ def verify_stored_message(
             used_nonces=used_nonces,
             max_age_seconds=max_age_seconds,
             key_revoked=public_key_record.is_revoked,
-            attachment_hashes=attachment_hashes or None
+            attachment_hashes=attachment_hashes or None,
+            expiry_seconds=message.expiry_seconds
         )
 
         # 14. Verify actual attachment files in private Supabase Storage.

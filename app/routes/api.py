@@ -1,3 +1,14 @@
+import base64
+import binascii
+
+from cryptography.exceptions import UnsupportedAlgorithm
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+
+from security.canonical import create_canonical_payload
+from security.hashing import calculate_sha256
+from security.signature_format import raw_ecdsa_to_der
+from security.ecdsa import verify_signature
 import hashlib
 import json
 from io import BytesIO
@@ -74,12 +85,18 @@ def admin_required():
     return current_user, None
 
 
+
 def serialize_message(message):
+    expired = message.is_expired
+
     return {
         "id": message.id,
         "sender": message.sender,
         "receiver": message.receiver,
-        "message": message.message,
+
+        # Never expose expired message content through the API.
+        "message": None if expired else message.message,
+
         "timestamp": message.timestamp_original,
         "nonce": message.nonce,
         "content_hash": message.content_hash,
@@ -88,6 +105,13 @@ def serialize_message(message):
         "verification_status": message.verification_status,
         "created_at": message.created_at.isoformat(),
 
+        "expiry_seconds": message.expiry_seconds,
+        "expires_at": (
+            message.expires_at.isoformat()
+            if message.expires_at else None
+        ),
+        "is_expired": expired,
+
         "attachments": [
             {
                 "id": attachment.id,
@@ -95,7 +119,10 @@ def serialize_message(message):
                 "mime_type": attachment.mime_type,
                 "file_size": attachment.file_size,
                 "sha256_hash": attachment.sha256_hash,
+
+                # Do not provide download URLs for expired messages.
                 "download_url": (
+                    None if expired else
                     f"/api/messages/{message.id}/attachments/"
                     f"{attachment.id}"
                 )
@@ -103,6 +130,7 @@ def serialize_message(message):
             for attachment in message.attachments
         ]
     }
+
 
 
 # -----------------------------------------
@@ -302,10 +330,10 @@ def revoke_key(user_id, key_id):
 # -----------------------------------------
 
 
+
 @api_bp.route("/messages", methods=["POST"])
 @jwt_required()
 def submit_message():
-
     current_user = get_current_user()
 
     if not current_user:
@@ -314,8 +342,6 @@ def submit_message():
     saved_attachments = []
 
     def cleanup_saved_files():
-        """Remove uploaded objects if message submission fails."""
-
         for attachment in saved_attachments:
             try:
                 delete_file(attachment.stored_filename)
@@ -324,7 +350,6 @@ def submit_message():
                     "Failed to remove orphaned Supabase attachment"
                 )
 
-    # Support JSON and multipart file uploads.
     if request.mimetype == "multipart/form-data":
         data = request.form.to_dict()
         uploaded_files = request.files.getlist("attachments")
@@ -358,6 +383,7 @@ def submit_message():
 
     try:
         key_id = int(data["public_key_id"])
+
         attachment_hashes = json.loads(
             data.get("attachment_hashes", "[]")
         )
@@ -376,11 +402,96 @@ def submit_message():
             or any(c not in "0123456789abcdef" for c in value)
             for value in attachment_hashes
         ):
+            return jsonify({"error": "Invalid attachment hash"}), 400
+
+        # Validate expiry duration.
+        expiry_raw = data.get("expiry_seconds", "")
+
+        if expiry_raw == "":
+            expiry_seconds = None
+        else:
+            if (
+                not isinstance(expiry_raw, str)
+                or not expiry_raw.isdigit()
+            ):
+                return jsonify({
+                    "error": "Invalid expiry duration"
+                }), 400
+
+            expiry_seconds = int(expiry_raw)
+
+            if expiry_seconds not in {
+                3600, 86400, 604800, 2592000
+            }:
+                return jsonify({
+                    "error": "Unsupported expiry duration"
+                }), 400
+
+        # Retrieve sender's public key.
+        public_key_record = db.session.get(PublicKey, key_id)
+
+        if (
+            not public_key_record
+            or public_key_record.user_id != current_user.id
+            or public_key_record.is_revoked
+            or public_key_record.algorithm != "ECDSA-P256"
+        ):
             return jsonify({
-                "error": "Invalid attachment hash"
+                "error": "Invalid or revoked signing key"
             }), 400
 
-        # Store signed message.
+        public_key_bytes = base64.b64decode(
+            public_key_record.public_key,
+            validate=True
+        )
+
+        public_key = serialization.load_der_public_key(
+            public_key_bytes
+        )
+
+        if (
+            not isinstance(public_key, ec.EllipticCurvePublicKey)
+            or not isinstance(public_key.curve, ec.SECP256R1)
+        ):
+            return jsonify({
+                "error": "Invalid ECDSA P-256 public key"
+            }), 400
+
+        # Recreate exactly the payload signed by the browser.
+        canonical_payload = create_canonical_payload(
+            sender=current_user.username,
+            receiver=receiver.username,
+            timestamp=data["timestamp"],
+            nonce=data["nonce"],
+            message=data["message"],
+            attachment_hashes=attachment_hashes or None,
+            expiry_seconds=expiry_seconds
+        )
+
+        calculated_hash = calculate_sha256(canonical_payload)
+
+        if calculated_hash != data["content_hash"]:
+            return jsonify({
+                "error": "Message content hash mismatch"
+            }), 400
+
+        raw_signature = base64.b64decode(
+            data["signature"],
+            validate=True
+        )
+
+        der_signature = raw_ecdsa_to_der(raw_signature)
+
+        if not verify_signature(
+            public_key,
+            canonical_payload,
+            der_signature
+        ):
+            return jsonify({
+                "error": "Message signature verification failed"
+            }), 400
+
+        # Store the message only after signature verification.
         message, error = store_message(
             sender_user_id=current_user.id,
             public_key_id=key_id,
@@ -390,15 +501,15 @@ def submit_message():
             nonce=data["nonce"],
             message=data["message"],
             content_hash=data["content_hash"],
-            signature=data["signature"]
+            signature=data["signature"],
+            expiry_seconds=expiry_seconds
         )
 
         if error:
             db.session.rollback()
-            cleanup_saved_files()
             return jsonify({"error": error}), 400
 
-        # Store attachments and independently calculate their hashes.
+        # Save attachments.
         for uploaded_file in uploaded_files:
             attachment, error = save_attachment(
                 uploaded_file,
@@ -424,7 +535,7 @@ def submit_message():
                 "error": "Attachment integrity hash mismatch"
             }), 400
 
-        # Record message and attachment information in ledger.
+        # Record signed expiry information in the ledger.
         entry, error = append_ledger_event(
             event_type="SENT",
             message_id=message.id,
@@ -433,7 +544,8 @@ def submit_message():
                 "sender": message.sender,
                 "receiver": message.receiver,
                 "content_hash": message.content_hash,
-                "attachment_hashes": actual_hashes
+                "attachment_hashes": actual_hashes,
+                "expiry_seconds": expiry_seconds
             },
             commit=False
         )
@@ -445,16 +557,22 @@ def submit_message():
 
         db.session.commit()
 
-    except (ValueError, TypeError, json.JSONDecodeError):
+    except (
+        ValueError,
+        TypeError,
+        binascii.Error,
+        UnsupportedAlgorithm
+    ):
         db.session.rollback()
         cleanup_saved_files()
         return jsonify({
-            "error": "Invalid message or attachment data"
+            "error": "Invalid message or cryptographic data"
         }), 400
 
     except Exception:
         db.session.rollback()
         cleanup_saved_files()
+        current_app.logger.exception("Message submission failed")
         return jsonify({
             "error": "Message submission failed"
         }), 500
@@ -473,6 +591,7 @@ def submit_message():
         "ledger_seq": entry.seq,
         "anchor_status": "published" if success else "pending"
     }), 201
+
 
 
 
@@ -709,6 +828,7 @@ def demo_ledger_tampering():
 # 14. SECURE ATTACHMENT DOWNLOAD
 # -----------------------------------------
 
+
 @api_bp.route(
     "/messages/<int:message_id>/attachments/<int:attachment_id>",
     methods=["GET"]
@@ -747,16 +867,26 @@ def download_attachment(message_id, attachment_id):
     if not (is_sender or is_receiver):
         return jsonify({"error": "Access forbidden"}), 403
 
+    # Block attachment downloads after message expiry.
+    if message.is_expired:
+        return jsonify({
+            "error": "Message has expired. Attachment is no longer available."
+        }), 410
+
     # Download the object from private Supabase Storage.
     try:
         file_content = download_file(attachment.stored_filename)
+
     except FileNotFoundError:
         return jsonify({"error": "Stored attachment not found"}), 404
+
     except Exception:
         current_app.logger.exception(
             "Failed to download attachment from Supabase Storage"
         )
-        return jsonify({"error": "Attachment storage is unavailable"}), 502
+        return jsonify({
+            "error": "Attachment storage is unavailable"
+        }), 502
 
     # Verify SHA-256 integrity before download.
     actual_hash = hashlib.sha256(file_content).hexdigest()

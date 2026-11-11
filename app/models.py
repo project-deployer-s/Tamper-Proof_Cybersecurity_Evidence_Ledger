@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -172,6 +172,38 @@ class Message(db.Model):
         nullable=False,
         default="PENDING"
     )
+
+        # Signed message availability duration.
+    # NULL means the message never expires.
+    expiry_seconds = db.Column(
+        db.Integer,
+        nullable=True
+    )
+
+    @property
+    def expires_at(self):
+        """Calculate expiry using the server-generated creation time."""
+        if self.expiry_seconds is None:
+            return None
+
+        return self.created_at + timedelta(
+            seconds=self.expiry_seconds
+        )
+
+    @property
+    def is_expired(self):
+        """Check message availability expiry, not signature freshness."""
+        expiry = self.expires_at
+
+        if expiry is None:
+            return False
+
+        now = datetime.now(timezone.utc)
+
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
+
+        return now >= expiry
 
     created_at = db.Column(
         db.DateTime(timezone=True),

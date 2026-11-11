@@ -12,8 +12,17 @@
   const form = $('send-form');
   const button = $('send-btn');
   const fileInput = $('attachments');
+  const expiryInput = $('expiry');
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+  const ALLOWED_EXPIRY_VALUES = [
+    '',
+    '3600',
+    '86400',
+    '604800',
+    '2592000'
+  ];
 
   const ALLOWED_EXTENSIONS = [
     'pdf', 'txt', 'csv', 'png',
@@ -59,23 +68,30 @@
         : '';
 
       if (!ALLOWED_EXTENSIONS.includes(extension)) {
-        throw new Error(
-          `File type not allowed: ${file.name}`
-        );
+        throw new Error(`File type not allowed: ${file.name}`);
       }
 
       if (file.size === 0) {
-        throw new Error(
-          `${file.name} is empty.`
-        );
+        throw new Error(`${file.name} is empty.`);
       }
 
       if (file.size > MAX_FILE_SIZE) {
-        throw new Error(
-          `${file.name} exceeds the 10 MB limit.`
-        );
+        throw new Error(`${file.name} exceeds the 10 MB limit.`);
       }
     }
+  }
+
+  function getExpiryLabel(seconds) {
+    const labels = {
+      '3600': '1 hour',
+      '86400': '24 hours',
+      '604800': '7 days',
+      '2592000': '30 days'
+    };
+
+    return seconds === null
+      ? 'Never expires'
+      : labels[String(seconds)];
   }
 
   // Load real users.
@@ -134,8 +150,15 @@
     const message = $('body').value.trim();
     const files = Array.from(fileInput.files);
 
+    const expiryValue = expiryInput.value;
+
     if (!receiver || !message) {
       showError('Select a receiver and enter a message.');
+      return;
+    }
+
+    if (!ALLOWED_EXPIRY_VALUES.includes(expiryValue)) {
+      showError('Select a valid message expiry duration.');
       return;
     }
 
@@ -145,6 +168,10 @@
       showError(error.message);
       return;
     }
+
+    const expirySeconds = expiryValue === ''
+      ? null
+      : Number(expiryValue);
 
     button.disabled = true;
     button.textContent = 'Signing message...';
@@ -185,14 +212,13 @@
 
       const nonce = bytesToHex(nonceBytes);
 
-      // 4. Calculate SHA-256 hashes of attachments.
+      // 4. Calculate attachment hashes.
       button.textContent = 'Hashing attachments...';
 
       const attachmentHashes = await Promise.all(
         files.map(file => calculateFileHash(file))
       );
 
-      // Sort hashes to ensure consistent canonical payload.
       attachmentHashes.sort();
 
       // 5. Create canonical payload.
@@ -204,9 +230,14 @@
         message: message
       };
 
-      // Preserve the old format when no files are attached.
       if (attachmentHashes.length > 0) {
         payloadObject.attachment_hashes = attachmentHashes;
+      }
+
+      // Include expiry only for finite durations.
+      // Never-expiring messages retain the original payload format.
+      if (expirySeconds !== null) {
+        payloadObject.expiry_seconds = expirySeconds;
       }
 
       const canonicalPayload = JSON.stringify(payloadObject);
@@ -257,6 +288,12 @@
         JSON.stringify(attachmentHashes)
       );
 
+      // Send the signed expiry duration to the server.
+      formData.append(
+        'expiry_seconds',
+        expirySeconds === null ? '' : String(expirySeconds)
+      );
+
       files.forEach(file => {
         formData.append('attachments', file);
       });
@@ -300,6 +337,9 @@
             <dt>Time</dt>
             <dd>${App.esc(timestamp)}</dd>
 
+            <dt>Availability</dt>
+            <dd>${App.esc(getExpiryLabel(expirySeconds))}</dd>
+
             <dt>Nonce</dt>
             <dd class="mono">${App.esc(nonce)}</dd>
 
@@ -311,7 +351,8 @@
           </dl>
 
           <p class="fine">
-            Your message and attachment hashes were signed using ECDSA P-256.
+            Your message, attachment hashes, and expiry duration
+            were signed using ECDSA P-256.
           </p>
 
           <a class="btn secondary" href="ledger.html">
