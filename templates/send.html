@@ -44,15 +44,24 @@
           </div>
 
           <div class="field">
-            <label for="expiry">Message availability</label>
-
-            <select id="expiry" required>
-              <option value="">Never expires</option>
-              <option value="3600">1 hour</option>
-              <option value="86400">24 hours</option>
-              <option value="604800">7 days</option>
-              <option value="2592000">30 days</option>
+            <label for="expiry-mode">Message expiry</label>
+            <select id="expiry-mode">
+              <option value="duration" selected>Set expiry duration</option>
+              <option value="never">Never expires</option>
             </select>
+
+            <div id="expiry-duration-fields" class="field" style="margin-top:12px">
+              <label for="expiry-duration">Duration</label>
+              <div style="display:grid;grid-template-columns:minmax(100px,1fr) minmax(120px,1fr);gap:10px">
+                <input id="expiry-duration" type="number" min="1" step="1" value="24" inputmode="numeric" required>
+                <select id="expiry-unit" aria-label="Expiry time unit">
+                  <option value="60">Minutes</option>
+                  <option value="3600" selected>Hours</option>
+                  <option value="86400">Days</option>
+                </select>
+              </div>
+              <p class="hint">Minimum: 1 minute · Maximum: 365 days</p>
+            </div>
 
             <p class="hint">
               After expiry, the message and its attachments become

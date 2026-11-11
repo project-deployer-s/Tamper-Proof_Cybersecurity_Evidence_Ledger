@@ -12,17 +12,15 @@
   const form = $('send-form');
   const button = $('send-btn');
   const fileInput = $('attachments');
-  const expiryInput = $('expiry');
 
+  const expiryModeInput = $('expiry-mode');
+  const expiryDurationInput = $('expiry-duration');
+  const expiryUnitInput = $('expiry-unit');
+  const expiryDurationFields = $('expiry-duration-fields');
+
+  const MIN_EXPIRY_SECONDS = 60;
+  const MAX_EXPIRY_SECONDS = 365 * 24 * 60 * 60;
   const MAX_FILE_SIZE = 10 * 1024 * 1024;
-
-  const ALLOWED_EXPIRY_VALUES = [
-    '',
-    '3600',
-    '86400',
-    '604800',
-    '2592000'
-  ];
 
   const ALLOWED_EXTENSIONS = [
     'pdf', 'txt', 'csv', 'png',
@@ -82,19 +80,82 @@
   }
 
   function getExpiryLabel(seconds) {
-    const labels = {
-      '3600': '1 hour',
-      '86400': '24 hours',
-      '604800': '7 days',
-      '2592000': '30 days'
-    };
+    if (seconds === null) return 'Never expires';
 
-    return seconds === null
-      ? 'Never expires'
-      : labels[String(seconds)];
+    if (seconds % 86400 === 0) {
+      const days = seconds / 86400;
+      return `${days} day${days === 1 ? '' : 's'}`;
+    }
+
+    if (seconds % 3600 === 0) {
+      const hours = seconds / 3600;
+      return `${hours} hour${hours === 1 ? '' : 's'}`;
+    }
+
+    const minutes = seconds / 60;
+    return `${minutes} minute${minutes === 1 ? '' : 's'}`;
   }
 
-  // Load real users.
+  function updateExpiryControls() {
+    const neverExpires = expiryModeInput.value === 'never';
+
+    expiryDurationFields.hidden = neverExpires;
+    expiryDurationInput.required = !neverExpires;
+    expiryDurationInput.disabled = neverExpires;
+    expiryUnitInput.disabled = neverExpires;
+
+    const unitSeconds = Number(expiryUnitInput.value);
+
+    if ([60, 3600, 86400].includes(unitSeconds)) {
+      expiryDurationInput.max = String(
+        Math.floor(MAX_EXPIRY_SECONDS / unitSeconds)
+      );
+    }
+  }
+
+  function getExpirySeconds() {
+    if (expiryModeInput.value === 'never') {
+      return null;
+    }
+
+    const rawDuration = expiryDurationInput.value.trim();
+
+    if (!/^\d+$/.test(rawDuration)) {
+      throw new Error(
+        'Enter a whole-number expiry duration.'
+      );
+    }
+
+    const duration = Number(rawDuration);
+
+    // IMPORTANT:
+    // These values match the option values in send.html.
+    const unitSeconds = Number(expiryUnitInput.value);
+
+    const allowedUnits = [60, 3600, 86400];
+
+    if (!allowedUnits.includes(unitSeconds)) {
+      throw new Error('Select a valid expiry time unit.');
+    }
+
+    const seconds = duration * unitSeconds;
+
+    if (
+      !Number.isSafeInteger(duration) ||
+      duration < 1 ||
+      !Number.isSafeInteger(seconds) ||
+      seconds < MIN_EXPIRY_SECONDS ||
+      seconds > MAX_EXPIRY_SECONDS
+    ) {
+      throw new Error(
+        'Expiry must be between 1 minute and 365 days.'
+      );
+    }
+
+    return seconds;
+  }
+
+  // Load users.
   const userResult = await api.listUsers();
 
   if (!userResult.ok) {
@@ -106,12 +167,12 @@
     `<option value="${App.esc(user.username)}">${App.esc(user.username)}</option>`
   ).join('');
 
-  // Update character count.
+  // Character counter.
   $('body').addEventListener('input', () => {
     $('count').textContent = $('body').value.length;
   });
 
-  // Display selected attachments.
+  // Attachment handling.
   fileInput.addEventListener('change', () => {
     showError('');
 
@@ -140,6 +201,20 @@
     }
   });
 
+  // Expiry controls.
+  expiryModeInput.addEventListener(
+    'change',
+    updateExpiryControls
+  );
+
+  expiryUnitInput.addEventListener(
+    'change',
+    updateExpiryControls
+  );
+
+  updateExpiryControls();
+
+  // Submit message.
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
 
@@ -150,34 +225,26 @@
     const message = $('body').value.trim();
     const files = Array.from(fileInput.files);
 
-    const expiryValue = expiryInput.value;
-
     if (!receiver || !message) {
       showError('Select a receiver and enter a message.');
       return;
     }
 
-    if (!ALLOWED_EXPIRY_VALUES.includes(expiryValue)) {
-      showError('Select a valid message expiry duration.');
-      return;
-    }
+    let expirySeconds;
 
     try {
+      expirySeconds = getExpirySeconds();
       validateFiles(files);
     } catch (error) {
       showError(error.message);
       return;
     }
 
-    const expirySeconds = expiryValue === ''
-      ? null
-      : Number(expiryValue);
-
     button.disabled = true;
     button.textContent = 'Signing message...';
 
     try {
-      // 1. Retrieve active public key.
+      // 1. Get active public key.
       const keysResult = await api.getUserKeys();
 
       if (!keysResult.ok) {
@@ -194,7 +261,7 @@
         );
       }
 
-      // 2. Retrieve private key from IndexedDB.
+      // 2. Load private key.
       const privateKey = await loadPrivateKey(me.id);
 
       if (!privateKey) {
@@ -203,7 +270,7 @@
         );
       }
 
-      // 3. Generate timestamp and unique nonce.
+      // 3. Timestamp and nonce.
       const timestamp = new Date().toISOString();
 
       const nonceBytes = crypto.getRandomValues(
@@ -212,7 +279,7 @@
 
       const nonce = bytesToHex(nonceBytes);
 
-      // 4. Calculate attachment hashes.
+      // 4. Hash attachments.
       button.textContent = 'Hashing attachments...';
 
       const attachmentHashes = await Promise.all(
@@ -221,7 +288,7 @@
 
       attachmentHashes.sort();
 
-      // 5. Create canonical payload.
+      // 5. Build canonical payload.
       const payloadObject = {
         sender: me.username,
         receiver: receiver,
@@ -234,18 +301,17 @@
         payloadObject.attachment_hashes = attachmentHashes;
       }
 
-      // Include expiry only for finite durations.
-      // Never-expiring messages retain the original payload format.
       if (expirySeconds !== null) {
         payloadObject.expiry_seconds = expirySeconds;
       }
 
       const canonicalPayload = JSON.stringify(payloadObject);
 
-      const encoder = new TextEncoder();
-      const payloadBytes = encoder.encode(canonicalPayload);
+      const payloadBytes = new TextEncoder().encode(
+        canonicalPayload
+      );
 
-      // 6. Calculate SHA-256 content hash.
+      // 6. Calculate content hash.
       const hashBuffer = await crypto.subtle.digest(
         'SHA-256',
         payloadBytes
@@ -255,7 +321,7 @@
         new Uint8Array(hashBuffer)
       );
 
-      // 7. Sign canonical payload with ECDSA P-256.
+      // 7. Sign payload.
       button.textContent = 'Signing message...';
 
       const signatureBuffer = await crypto.subtle.sign(
@@ -271,7 +337,7 @@
         new Uint8Array(signatureBuffer)
       );
 
-      // 8. Prepare multipart request.
+      // 8. Prepare request.
       const formData = new FormData();
 
       formData.append('public_key_id', activeKey.id);
@@ -288,7 +354,6 @@
         JSON.stringify(attachmentHashes)
       );
 
-      // Send the signed expiry duration to the server.
       formData.append(
         'expiry_seconds',
         expirySeconds === null ? '' : String(expirySeconds)
@@ -298,7 +363,7 @@
         formData.append('attachments', file);
       });
 
-      // 9. Submit signed message and attachments.
+      // 9. Send message.
       button.textContent = 'Uploading and sending...';
 
       const result = await api.sendMessage(formData);
@@ -309,7 +374,7 @@
 
       const sent = result.data.data;
 
-      // 10. Display success.
+      // 10. Display result.
       $('outcome').innerHTML = `
         <div class="seal ok" role="status">
           <span class="seal-icon" aria-hidden="true">✓</span>
@@ -362,11 +427,16 @@
       `;
 
       form.reset();
+
+      updateExpiryControls();
+
       $('count').textContent = '0';
       $('attachment-list').innerHTML = '';
 
     } catch (error) {
-      showError(error.message || 'Message submission failed.');
+      showError(
+        error.message || 'Message submission failed.'
+      );
     } finally {
       button.disabled = false;
       button.textContent = 'Sign and send';

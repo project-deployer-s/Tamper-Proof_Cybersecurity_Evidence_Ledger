@@ -8,6 +8,7 @@ from cryptography.hazmat.primitives import serialization
 
 from app import create_app
 from app.extensions import db
+from app.services.message_service import store_message
 from app.models import (
     User,
     PublicKey,
@@ -139,7 +140,7 @@ def test_data(client, app):
 
 @pytest.mark.parametrize(
     "duration",
-    [3600, 86400, 604800, 2592000]
+    [60, 61, 3600, 86400, 604800, 2592000, 31536000]
 )
 def test_supported_expiry_durations(
     app, test_data, duration
@@ -365,3 +366,24 @@ def test_expiry_preserves_ledger_evidence(
         assert stored_entry is not None
         assert stored_entry.detail["content_hash"] == original_hash
         assert stored_entry.detail["expiry_seconds"] == 3600
+
+
+@pytest.mark.parametrize("duration", [1, 59, 31536001, -60, 1.5, True])
+def test_store_message_rejects_invalid_expiry_durations(
+    app, test_data, duration
+):
+    with app.app_context():
+        result, error = store_message(
+            sender_user_id=test_data["sender_id"],
+            public_key_id=test_data["key_id"],
+            sender="sender",
+            receiver="receiver",
+            timestamp="2026-11-09T10:00:00Z",
+            nonce="invalid-expiry-test-nonce",
+            message="Invalid expiry test",
+            content_hash="b" * 64,
+            signature="test-signature",
+            expiry_seconds=duration
+        )
+        assert result is None
+        assert error is not None

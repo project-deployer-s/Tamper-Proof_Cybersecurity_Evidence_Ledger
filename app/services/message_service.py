@@ -5,14 +5,9 @@ from app.extensions import db
 from app.models import User, PublicKey, Message
 
 
-# Allowed message availability durations, in seconds.
-ALLOWED_EXPIRY_VALUES = {
-    None,
-    3600,       # 1 hour
-    86400,      # 24 hours
-    604800,     # 7 days
-    2592000     # 30 days
-}
+# Message expiry bounds, expressed in seconds.
+MIN_EXPIRY_SECONDS = 60
+MAX_EXPIRY_SECONDS = 365 * 24 * 60 * 60
 
 
 def store_message(
@@ -44,13 +39,15 @@ def store_message(
             if isinstance(expiry_seconds, bool):
                 return None, "Invalid expiry duration"
 
-            try:
+            if isinstance(expiry_seconds, str):
+                if not expiry_seconds.isdigit():
+                    return None, "Invalid expiry duration"
                 expiry_seconds = int(expiry_seconds)
-            except (ValueError, TypeError):
+            elif not isinstance(expiry_seconds, int):
                 return None, "Invalid expiry duration"
 
-            if expiry_seconds not in ALLOWED_EXPIRY_VALUES:
-                return None, "Unsupported expiry duration"
+            if not MIN_EXPIRY_SECONDS <= expiry_seconds <= MAX_EXPIRY_SECONDS:
+                return None, "Expiry must be between 1 minute and 365 days"
 
         # 2. Check sender.
         user = db.session.get(User, sender_user_id)

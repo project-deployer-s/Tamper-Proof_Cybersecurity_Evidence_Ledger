@@ -420,11 +420,9 @@ def submit_message():
 
             expiry_seconds = int(expiry_raw)
 
-            if expiry_seconds not in {
-                3600, 86400, 604800, 2592000
-            }:
+            if not 60 <= expiry_seconds <= 365 * 24 * 60 * 60:
                 return jsonify({
-                    "error": "Unsupported expiry duration"
+                    "error": "Expiry must be between 1 minute and 365 days"
                 }), 400
 
         # Retrieve sender's public key.
