@@ -81,6 +81,39 @@
             <p class="hint">Keep the backup somewhere safe. If you lose your key you must revoke it and create a new one.</p>
           </div>
         </div>
+
+<!-- Restore an existing private key after signing in -->
+<div id="pane-restore" hidden>
+  <h2>Restore your signing key</h2>
+
+  <p class="fine" style="margin-top:6px">
+    Select your existing private-key backup.
+    Your key will be verified locally against your account's
+    active public key before being saved in this browser.
+  </p>
+
+  <div class="field" style="margin-top:14px">
+    <label for="key-backup-file">Private-key backup (.txt)</label>
+    <input
+      type="file"
+      id="key-backup-file"
+      accept=".txt,text/plain"
+    >
+  </div>
+
+  <p class="error-text" id="restore-error" role="alert" hidden></p>
+  <p id="restore-success" role="status" hidden></p>
+
+  <div class="row" style="margin-top:14px">
+    <button class="btn" type="button" id="restore-key">
+      Restore existing key
+    </button>
+    <a class="btn secondary" href="inbox.html">
+      Continue to inbox
+    </a>
+  </div>
+</div>
+
       </section>
 
     </div>

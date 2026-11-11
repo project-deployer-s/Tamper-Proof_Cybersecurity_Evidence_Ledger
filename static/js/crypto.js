@@ -1,38 +1,19 @@
+
 async function generateKeyPair() {
     return await crypto.subtle.generateKey(
-        {
-            name: "ECDSA",
-            namedCurve: "P-256"
-        },
+        { name: "ECDSA", namedCurve: "P-256" },
         true,
         ["sign", "verify"]
     );
 }
 
-async function testKeyGeneration() {
-    const keyPair = await generateKeyPair();
-
-    console.log("Private key:", keyPair.privateKey);
-    console.log("Public key:", keyPair.publicKey);
-
-    return keyPair;
-}
-
 async function exportPublicKey(publicKey) {
-    return await crypto.subtle.exportKey(
-        "spki",
-        publicKey
-    );
+    return crypto.subtle.exportKey("spki", publicKey);
 }
-
 
 async function exportPrivateKey(privateKey) {
-    return await crypto.subtle.exportKey(
-        "pkcs8",
-        privateKey
-    );
+    return crypto.subtle.exportKey("pkcs8", privateKey);
 }
-
 
 function arrayBufferToBase64(buffer) {
     const bytes = new Uint8Array(buffer);
@@ -45,67 +26,15 @@ function arrayBufferToBase64(buffer) {
     return btoa(binary);
 }
 
+function base64ToArrayBuffer(base64) {
+    const binary = atob(base64.replace(/\s/g, ""));
+    const bytes = new Uint8Array(binary.length);
 
-function downloadPrivateKey(privateKeyBase64) {
-    const blob = new Blob(
-        [privateKeyBase64],
-        { type: "text/plain" }
-    );
+    for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
 
-    const url = URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "private-key-backup.txt";
-
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-
-    URL.revokeObjectURL(url);
-}
-
-async function setupKeys() {
-    const keyPair = await generateKeyPair();
-
-    const publicKey = await exportPublicKey(
-        keyPair.publicKey
-    );
-
-    const privateKey = await exportPrivateKey(
-        keyPair.privateKey
-    );
-
-    const publicKeyBase64 =
-        arrayBufferToBase64(publicKey);
-
-    const privateKeyBase64 =
-        arrayBufferToBase64(privateKey);
-
-    console.log("Public key:", publicKeyBase64);
-
-    downloadPrivateKey(privateKeyBase64);
-
-    return {
-        keyPair,
-        publicKeyBase64
-    };
-}
-
-async function signPayload(privateKey, payload) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(payload);
-
-    const signature = await crypto.subtle.sign(
-        {
-            name: "ECDSA",
-            hash: "SHA-256"
-        },
-        privateKey,
-        data
-    );
-
-    return new Uint8Array(signature);
+    return bytes.buffer;
 }
 
 function bytesToBase64(bytes) {
@@ -118,61 +47,49 @@ function bytesToBase64(bytes) {
     return btoa(binary);
 }
 
-async function testSigning() {
-    const keyPair = await generateKeyPair();
-
-    const payload = JSON.stringify({
-        sender: "Alice",
-        receiver: "Bob",
-        timestamp: "2026-10-06T12:00:00Z",
-        nonce: "abc123",
-        message: "Hello Bob"
+function downloadPrivateKey(privateKeyBase64) {
+    const blob = new Blob([privateKeyBase64], {
+        type: "text/plain"
     });
 
-    const signature = await signPayload(
-        keyPair.privateKey,
-        payload
-    );
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
 
-    const signatureBase64 = bytesToBase64(signature);
+    link.href = url;
+    link.download = "private-key-backup.txt";
 
-    console.log("Canonical payload:", payload);
-    console.log("Signature length:", signature.length);
-    console.log("Signature Base64:", signatureBase64);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
 
-    return {
-        keyPair,
-        payload,
-        signature,
-        signatureBase64
-    };
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-async function getCryptoTestData() {
-    const keyPair = await generateKeyPair();
+async function signPayload(privateKey, payload) {
+    const data = new TextEncoder().encode(payload);
 
-    const payload = JSON.stringify({
-        sender: "Alice",
-        receiver: "Bob",
-        timestamp: "2026-10-06T12:00:00Z",
-        nonce: "abc123",
-        message: "Hello Bob"
-    });
+    const signature = await crypto.subtle.sign(
+        { name: "ECDSA", hash: "SHA-256" },
+        privateKey,
+        data
+    );
+
+    return new Uint8Array(signature);
+}
+
+async function setupKeys() {
+    const keyPair = await generateKeyPair();
 
     const publicKey = await exportPublicKey(keyPair.publicKey);
+    const privateKey = await exportPrivateKey(keyPair.privateKey);
 
-    const signature = await signPayload(
-        keyPair.privateKey,
-        payload
-    );
+    const publicKeyBase64 = arrayBufferToBase64(publicKey);
+    const privateKeyBase64 = arrayBufferToBase64(privateKey);
 
-    return {
-        payload: payload,
-        publicKeyBase64: arrayBufferToBase64(publicKey),
-        signatureBase64: bytesToBase64(signature)
-    };
+    downloadPrivateKey(privateKeyBase64);
+
+    return { keyPair, publicKeyBase64 };
 }
-
 
 function openKeyDatabase() {
     return new Promise((resolve, reject) => {
@@ -199,7 +116,7 @@ async function savePrivateKey(userId, privateKey) {
 
         transaction.objectStore("keys").put({
             userId: String(userId),
-            privateKey: privateKey,
+            privateKey,
             createdAt: new Date().toISOString()
         });
 
@@ -212,6 +129,11 @@ async function savePrivateKey(userId, privateKey) {
             db.close();
             reject(transaction.error);
         };
+
+        transaction.onabort = () => {
+            db.close();
+            reject(transaction.error || new Error("Key storage failed."));
+        };
     });
 }
 
@@ -223,25 +145,60 @@ async function loadPrivateKey(userId) {
         const request = transaction.objectStore("keys").get(String(userId));
 
         request.onsuccess = () => {
-            db.close();
             resolve(request.result?.privateKey || null);
         };
 
-        request.onerror = () => {
-            db.close();
-            reject(request.error);
-        };
+        request.onerror = () => reject(request.error);
+
+        transaction.oncomplete = () => db.close();
+        transaction.onerror = () => db.close();
     });
 }
 
-// Make crypto functions available to other scripts.
+async function importPrivateKey(base64) {
+    return crypto.subtle.importKey(
+        "pkcs8",
+        base64ToArrayBuffer(base64),
+        { name: "ECDSA", namedCurve: "P-256" },
+        true,
+        ["sign"]
+    );
+}
+
+async function matchesPublicKey(privateKey, publicKeyBase64) {
+    const publicKey = await crypto.subtle.importKey(
+        "spki",
+        base64ToArrayBuffer(publicKeyBase64),
+        { name: "ECDSA", namedCurve: "P-256" },
+        false,
+        ["verify"]
+    );
+
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+
+    const signature = await crypto.subtle.sign(
+        { name: "ECDSA", hash: "SHA-256" },
+        privateKey,
+        challenge
+    );
+
+    return crypto.subtle.verify(
+        { name: "ECDSA", hash: "SHA-256" },
+        publicKey,
+        signature,
+        challenge
+    );
+}
+
 window.generateKeyPair = generateKeyPair;
 window.exportPublicKey = exportPublicKey;
 window.exportPrivateKey = exportPrivateKey;
 window.arrayBufferToBase64 = arrayBufferToBase64;
+window.bytesToBase64 = bytesToBase64;
 window.downloadPrivateKey = downloadPrivateKey;
 window.signPayload = signPayload;
-window.bytesToBase64 = bytesToBase64;
 window.savePrivateKey = savePrivateKey;
 window.loadPrivateKey = loadPrivateKey;
 window.setupKeys = setupKeys;
+window.importPrivateKey = importPrivateKey;
+window.matchesPublicKey = matchesPublicKey;
