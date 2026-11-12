@@ -657,3 +657,53 @@ tr:last-child td { border-bottom: 0; }
     grid-template-columns: 1fr;
   }
 }
+
+/* =========================================================
+   INBOX: independent message-list scrolling
+   The message list scrolls; the selected detail stays put.
+   ========================================================= */
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(260px, 370px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.msg-list {
+  min-height: 0;
+  max-height: calc(100vh - 250px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+#detail {
+  position: sticky;
+  top: 16px;
+  align-self: start;
+  min-width: 0;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+
+/* On narrow screens, stack the panels and keep normal page flow. */
+@media (max-width: 860px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+
+  .msg-list {
+    max-height: 360px;
+  }
+
+  #detail {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}

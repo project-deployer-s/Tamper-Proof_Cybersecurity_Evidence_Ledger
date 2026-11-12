@@ -19,15 +19,29 @@
   }
 
   function isExpired(message) {
-    if (typeof message.is_expired === 'boolean') {
-      return message.is_expired;
+    // NULL expiry means the message never expires.
+    if (
+        message.expiry_seconds === null ||
+        message.expiry_seconds === undefined ||
+        message.expiry_seconds === ''
+    ) {
+        return false;
     }
 
-    return Boolean(
-      message.expires_at &&
-      Date.now() >= new Date(message.expires_at).getTime()
-    );
-  }
+    // Check the actual expiration timestamp.
+    if (message.expires_at) {
+        const expiryTime = new Date(message.expires_at).getTime();
+
+        if (!Number.isFinite(expiryTime)) {
+            console.error('Invalid message expiry timestamp:', message);
+            return false;
+        }
+
+        return Date.now() >= expiryTime;
+    }
+
+    return false;
+}
 
   function formatExpiry(message) {
     if (!message.expires_at) return 'Never expires';
