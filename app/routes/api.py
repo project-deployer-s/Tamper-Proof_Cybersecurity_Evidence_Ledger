@@ -698,20 +698,66 @@ def get_ledger():
         LedgerEntry.seq.desc()
     ).all()
 
+    # Fetch related messages in one query. Verification events may not
+    # contain sender/receiver in their detail JSON, even though the
+    # original message still has those values.
+    message_ids = {
+        entry.message_id
+        for entry in entries
+        if entry.message_id is not None
+    }
+
+    messages_by_id = {}
+    if message_ids:
+        related_messages = Message.query.filter(
+            Message.id.in_(message_ids)
+        ).all()
+        messages_by_id = {
+            message.id: message
+            for message in related_messages
+        }
+
+    serialized_entries = []
+
+    for entry in entries:
+        detail = entry.detail
+        if not isinstance(detail, dict):
+            detail = {}
+
+        message = messages_by_id.get(entry.message_id)
+
+        # Prefer the original message record. Fall back to values already
+        # recorded in the immutable ledger event for legacy/deleted records.
+        sender = (
+            message.sender if message else detail.get("sender")
+        )
+        receiver = (
+            message.receiver if message else detail.get("receiver")
+        )
+
+        # Enrich the API response only; do not alter the stored ledger detail
+        # or recompute historical ledger hashes.
+        response_detail = dict(detail)
+        if sender is not None:
+            response_detail.setdefault("sender", sender)
+        if receiver is not None:
+            response_detail.setdefault("receiver", receiver)
+
+        serialized_entries.append({
+            "seq": entry.seq,
+            "event_type": entry.event_type,
+            "message_id": entry.message_id,
+            "actor_id": entry.actor_id,
+            "sender": sender,
+            "receiver": receiver,
+            "detail": response_detail,
+            "prev_hash": entry.prev_hash,
+            "entry_hash": entry.entry_hash,
+            "created_at": entry.created_at.isoformat()
+        })
+
     return jsonify({
-        "entries": [
-            {
-                "seq": entry.seq,
-                "event_type": entry.event_type,
-                "message_id": entry.message_id,
-                "actor_id": entry.actor_id,
-                "detail": entry.detail,
-                "prev_hash": entry.prev_hash,
-                "entry_hash": entry.entry_hash,
-                "created_at": entry.created_at.isoformat()
-            }
-            for entry in entries
-        ]
+        "entries": serialized_entries
     }), 200
 
 

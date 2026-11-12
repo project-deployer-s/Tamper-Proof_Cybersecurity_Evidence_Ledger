@@ -19,37 +19,52 @@
   };
 
   function formatTime(value) {
-  if (!value) return 'Unknown time';
+    if (!value) return 'Unknown time';
 
-  const date = new Date(value);
+    const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
-    return 'Unknown time';
+    if (Number.isNaN(date.getTime())) {
+      return 'Unknown time';
+    }
+
+    return date.toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    }) + ' IST';
   }
 
-  return date.toLocaleString('en-IN', {
-    timeZone: 'Asia/Kolkata',
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: true
-  }) + ' IST';
-}
+  // Get sender and receiver from the API response.
+  // Supports both new and legacy ledger entries.
+  function getParticipants(entry) {
+    const detail = entry.detail || {};
+
+    return {
+      sender: entry.sender || detail.sender || null,
+      receiver: entry.receiver || detail.receiver || null
+    };
+  }
 
   function summarize(entry) {
     const detail = entry.detail || {};
 
     if (entry.event_type === 'KEY_REVOKED') {
-      return App.esc(detail.user || 'A user') + ' revoked a key';
+      return App.esc(detail.user || 'A user') +
+        ' revoked a key';
     }
 
-    const sender = detail.sender || 'Unknown sender';
-    const receiver = detail.receiver || 'Unknown receiver';
+    const { sender, receiver } = getParticipants(entry);
 
-    return App.esc(sender) + ' → ' + App.esc(receiver);
+    return (
+      App.esc(sender || 'Unknown sender') +
+      ' → ' +
+      App.esc(receiver || 'Unknown receiver')
+    );
   }
 
   function blockHtml(entry) {
@@ -58,7 +73,9 @@
     let badge = '';
 
     if (entry.event_type === 'VERIFIED') {
-      badge = App.badge(detail.verdict || detail.status || 'PENDING');
+      badge = App.badge(
+        detail.verdict || detail.status || 'PENDING'
+      );
     }
 
     return `
@@ -67,7 +84,10 @@
 
         <div>
           <div class="ev">
-            ${App.esc(EVENT_LABEL[entry.event_type] || entry.event_type)}
+            ${App.esc(
+              EVENT_LABEL[entry.event_type] ||
+              entry.event_type
+            )}
             ${badge}
           </div>
 
@@ -80,12 +100,16 @@
         <div class="hashes">
           <div>
             <span>hash</span>
-            <span class="full-hash">${App.esc(entry.entry_hash)}</span>
+            <span class="full-hash">
+              ${App.esc(entry.entry_hash || '')}
+            </span>
           </div>
 
           <div>
             <span>prev</span>
-            <span class="full-hash">${App.esc(entry.prev_hash)}</span>
+            <span class="full-hash">
+              ${App.esc(entry.prev_hash || '')}
+            </span>
           </div>
         </div>
       </li>
@@ -97,7 +121,10 @@
 
     if (!entries.length) {
       chain.innerHTML =
-        '<li class="empty panel"><strong>The ledger is empty</strong>Send a message and it will appear here.</li>';
+        '<li class="empty panel">' +
+        '<strong>The ledger is empty</strong>' +
+        'Send a message and it will appear here.' +
+        '</li>';
 
       $('summary').textContent = '';
       $('check-chain').disabled = true;
@@ -111,7 +138,7 @@
     $('summary').innerHTML =
       entries.length +
       ' entries. Latest hash: <span class="mono">' +
-      App.esc(latest.entry_hash) +
+      App.esc(latest.entry_hash || '') +
       '</span>';
 
     chain.innerHTML = entries.map((entry, index) => {
@@ -120,7 +147,9 @@
       return blockHtml(entry) +
         (link
           ? `<li class="link" aria-hidden="true">
-               <span>#${entry.seq} stores the hash of #${link.seq}</span>
+               <span>
+                 #${entry.seq} stores the hash of #${link.seq}
+               </span>
              </li>`
           : '');
     }).join('');
@@ -130,27 +159,43 @@
     $('chain').innerHTML =
       '<li class="empty panel">Loading ledger entries...</li>';
 
-    const result = await api.getLedger();
+    try {
+      const result = await api.getLedger();
 
-    if (!result.ok) {
+      if (!result.ok) {
+        $('chain').innerHTML =
+          '<li class="empty panel">Unable to load ledger: ' +
+          App.esc(result.error) + '</li>';
+
+        $('check-chain').disabled = true;
+        return;
+      }
+
+      entries = result.data.entries || [];
+
+      // Backend returns newest entries first.
+      renderChain();
+
+    } catch (error) {
+      console.error('Ledger loading error:', error);
+
       $('chain').innerHTML =
-        '<li class="empty panel">Unable to load ledger: ' +
-        App.esc(result.error) + '</li>';
+        '<li class="empty panel">Unable to load ledger entries.</li>';
 
       $('check-chain').disabled = true;
-      return;
     }
-
-    entries = result.data.entries || [];
-
-    // Backend returns newest first. Keep that order for display.
-    renderChain();
   }
 
   function clearMarks() {
-    document.querySelectorAll('.block, .link').forEach((element) => {
-      element.classList.remove('is-ok', 'is-broken', 'is-unchecked');
-    });
+    document.querySelectorAll('.block, .link').forEach(
+      (element) => {
+        element.classList.remove(
+          'is-ok',
+          'is-broken',
+          'is-unchecked'
+        );
+      }
+    );
 
     $('banner').hidden = true;
   }
@@ -163,113 +208,170 @@
 
     clearMarks();
 
-    const result = await api.checkLedger();
+    try {
+      const result = await api.checkLedger();
 
-    const banner = $('banner');
-    banner.hidden = false;
+      const banner = $('banner');
+      banner.hidden = false;
 
-    if (result.ok && result.data.integrity === 'VALID') {
-      banner.className = 'banner ok';
+      if (
+        result.ok &&
+        result.data.integrity === 'VALID'
+      ) {
+        banner.className = 'banner ok';
 
-      banner.innerHTML =
-        'Chain intact<p>' +
-        App.esc(result.data.message || 'All ledger entries passed verification.') +
-        '</p>';
+        banner.innerHTML =
+          'Chain intact<p>' +
+          App.esc(
+            result.data.message ||
+            'All ledger entries passed verification.'
+          ) +
+          '</p>';
 
-      document.querySelectorAll('.block').forEach((element) => {
-        element.classList.add('is-ok');
-      });
+        document.querySelectorAll('.block').forEach(
+          (element) => {
+            element.classList.add('is-ok');
+          }
+        );
 
-    } else {
-      const message = result.data?.message || result.error ||
-        'Ledger integrity verification failed.';
+      } else {
+        const message =
+          result.data?.message ||
+          result.error ||
+          'Ledger integrity verification failed.';
 
-      banner.className = 'banner bad';
+        banner.className = 'banner bad';
 
-      banner.innerHTML =
-        'Chain integrity check failed<p>' +
-        App.esc(message) +
-        '</p>';
+        banner.innerHTML =
+          'Chain integrity check failed<p>' +
+          App.esc(message) +
+          '</p>';
 
-      document.querySelectorAll('.block').forEach((element) => {
-        element.classList.add('is-unchecked');
-      });
+        document.querySelectorAll('.block').forEach(
+          (element) => {
+            element.classList.add('is-unchecked');
+          }
+        );
+      }
+
+    } catch (error) {
+      console.error('Chain verification error:', error);
+
+      $('banner').hidden = false;
+      $('banner').className = 'banner bad';
+      $('banner').textContent =
+        'Unable to complete ledger verification.';
+
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Check the chain';
     }
-
-    button.disabled = false;
-    button.textContent = 'Check the chain';
   }
 
-  $('check-chain').addEventListener('click', checkChain);
+  $('check-chain').addEventListener(
+    'click',
+    checkChain
+  );
 
-  $('copy-head').addEventListener('click', async () => {
-    if (!entries.length) return;
+  $('copy-head').addEventListener(
+    'click',
+    async () => {
+      if (!entries.length) return;
 
-    const hash = entries[0].entry_hash;
+      const hash = entries[0].entry_hash;
 
-    try {
-      await navigator.clipboard.writeText(hash);
-      App.toast('Latest hash copied.');
-    } catch {
-      App.toast('Could not copy the hash.', 'bad');
+      try {
+        await navigator.clipboard.writeText(hash);
+        App.toast('Latest hash copied.');
+      } catch {
+        App.toast('Could not copy the hash.', 'bad');
+      }
     }
-  });
+  );
 
   async function renderAlerts() {
     $('alerts').innerHTML =
       '<div class="panel empty">Loading alerts...</div>';
 
-    const result = await api.getAlerts();
+    try {
+      const result = await api.getAlerts();
 
-    if (!result.ok) {
-      $('alerts').innerHTML =
-        '<div class="panel empty">Unable to load alerts: ' +
-        App.esc(result.error) + '</div>';
-      return;
-    }
+      if (!result.ok) {
+        $('alerts').innerHTML =
+          '<div class="panel empty">Unable to load alerts: ' +
+          App.esc(result.error) + '</div>';
+        return;
+      }
 
-    alerts = result.data.alerts || [];
+      alerts = result.data.alerts || [];
 
-    if (!alerts.length) {
-      $('alerts').innerHTML =
-        '<div class="panel empty"><strong>No alerts</strong>Failed verification checks appear here.</div>';
-      return;
-    }
+      if (!alerts.length) {
+        $('alerts').innerHTML =
+          '<div class="panel empty">' +
+          '<strong>No alerts</strong>' +
+          'Failed verification checks appear here.' +
+          '</div>';
+        return;
+      }
 
-    $('alerts').innerHTML = `
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Entry</th>
-              <th>When</th>
-              <th>Problem</th>
-              <th>Severity</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            ${alerts.map((alert) => `
+      $('alerts').innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead>
               <tr>
-                <td class="mono">#${alert.ledger_seq}</td>
-                <td>${App.esc(formatTime(alert.created_at))}</td>
-                <td>${App.esc(alert.alert_type)}</td>
-                <td>${App.esc(alert.severity)}</td>
-                <td>${alert.acknowledged ? 'Acknowledged' : 'Unacknowledged'}</td>
+                <th>Entry</th>
+                <th>When</th>
+                <th>Problem</th>
+                <th>Severity</th>
+                <th>Status</th>
               </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-    `;
+            </thead>
+
+            <tbody>
+              ${alerts.map((alert) => `
+                <tr>
+                  <td class="mono">#${alert.ledger_seq}</td>
+
+                  <td>
+                    ${App.esc(formatTime(alert.created_at))}
+                  </td>
+
+                  <td>${App.esc(alert.alert_type)}</td>
+
+                  <td>${App.esc(alert.severity)}</td>
+
+                  <td>
+                    ${alert.acknowledged
+                      ? 'Acknowledged'
+                      : 'Unacknowledged'}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+    } catch (error) {
+      console.error('Alert loading error:', error);
+
+      $('alerts').innerHTML =
+        '<div class="panel empty">Unable to load alerts.</div>';
+    }
   }
 
   function showView(name) {
     const isLedger = name === 'ledger';
 
-    $('tab-ledger').setAttribute('aria-selected', String(isLedger));
-    $('tab-alerts').setAttribute('aria-selected', String(!isLedger));
+    $('tab-ledger').setAttribute(
+      'aria-selected',
+      String(isLedger)
+    );
+
+    $('tab-alerts').setAttribute(
+      'aria-selected',
+      String(!isLedger)
+    );
 
     $('view-ledger').hidden = !isLedger;
     $('view-alerts').hidden = isLedger;
@@ -279,8 +381,15 @@
     }
   }
 
-  $('tab-ledger').addEventListener('click', () => showView('ledger'));
-  $('tab-alerts').addEventListener('click', () => showView('alerts'));
+  $('tab-ledger').addEventListener(
+    'click',
+    () => showView('ledger')
+  );
+
+  $('tab-alerts').addEventListener(
+    'click',
+    () => showView('alerts')
+  );
 
   await loadLedger();
 
