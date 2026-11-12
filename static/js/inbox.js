@@ -13,6 +13,7 @@
   let messages = [];
   let selectedId = null;
   let lastResult = null;
+  let detailCollapsed = false;
 
   function showError(message) {
     App.toast(message || 'Something went wrong.', 'bad');
@@ -21,27 +22,27 @@
   function isExpired(message) {
     // NULL expiry means the message never expires.
     if (
-        message.expiry_seconds === null ||
-        message.expiry_seconds === undefined ||
-        message.expiry_seconds === ''
+      message.expiry_seconds === null ||
+      message.expiry_seconds === undefined ||
+      message.expiry_seconds === ''
     ) {
-        return false;
+      return false;
     }
 
     // Check the actual expiration timestamp.
     if (message.expires_at) {
-        const expiryTime = new Date(message.expires_at).getTime();
+      const expiryTime = new Date(message.expires_at).getTime();
 
-        if (!Number.isFinite(expiryTime)) {
-            console.error('Invalid message expiry timestamp:', message);
-            return false;
-        }
+      if (!Number.isFinite(expiryTime)) {
+        console.error('Invalid message expiry timestamp:', message);
+        return false;
+      }
 
-        return Date.now() >= expiryTime;
+      return Date.now() >= expiryTime;
     }
 
     return false;
-}
+  }
 
   function formatExpiry(message) {
     if (!message.expires_at) return 'Never expires';
@@ -100,9 +101,12 @@
     const m = messages.find(x => Number(x.id) === selectedId);
 
     if (!m) {
+      $('detail').classList.remove('is-collapsed');
+
       $('detail').innerHTML =
         '<div class="empty"><strong>Select a message</strong>' +
         'You can inspect and verify the selected message here.</div>';
+
       return;
     }
 
@@ -170,38 +174,71 @@
         ${attachmentHTML}
       `;
 
+    $('detail').classList.toggle('is-collapsed', detailCollapsed);
+
     $('detail').innerHTML = `
-      <h2>From ${App.esc(m.sender)}</h2>
+      <div class="detail-toolbar">
+        <h2>From ${App.esc(m.sender)}</h2>
 
-      ${messageContent}
+        <button
+          class="btn secondary detail-toggle"
+          type="button"
+          id="toggle-detail"
+          aria-expanded="${!detailCollapsed}">
+          ${detailCollapsed ? 'Expand details' : 'Collapse details'}
+        </button>
+      </div>
 
-      <dl class="facts">
-        <dt>Sent</dt>
-        <dd>${App.fmtTime(m.timestamp)}</dd>
+      <div class="detail-collapsed-summary">
+        <p>
+          <strong>Message:</strong>
+          ${expired ? 'Message Expired' : App.esc(m.message)}
+        </p>
 
-        <dt>Availability</dt>
-        <dd>${App.esc(formatExpiry(m))}</dd>
+        <p>
+          <strong>Sent:</strong>
+          ${App.fmtTime(m.timestamp)}
+        </p>
 
-        <dt>One-time number</dt>
-        <dd class="mono">${App.esc(m.nonce)}</dd>
+        <p>
+          <strong>Status:</strong>
+          ${App.badge(m.verification_status || 'PENDING')}
+        </p>
+      </div>
 
-        <dt>Content hash</dt>
-        <dd class="mono">${App.esc(m.content_hash)}</dd>
+      <div class="detail-content" ${detailCollapsed ? 'hidden' : ''}>
 
-        <dt>Status</dt>
-        <dd>${App.badge(m.verification_status || 'PENDING')}</dd>
-      </dl>
+        ${messageContent}
 
-      ${expired ? '' : `
-        <div class="row" style="margin-bottom:16px">
-          <button class="btn" type="button" id="check-btn"
-            data-id="${Number(m.id)}">
-            Verify message
-          </button>
-        </div>
-      `}
+        <dl class="facts">
+          <dt>Sent</dt>
+          <dd>${App.fmtTime(m.timestamp)}</dd>
 
-      <div id="report">${report}</div>
+          <dt>Availability</dt>
+          <dd>${App.esc(formatExpiry(m))}</dd>
+
+          <dt>One-time number</dt>
+          <dd class="mono">${App.esc(m.nonce)}</dd>
+
+          <dt>Content hash</dt>
+          <dd class="mono">${App.esc(m.content_hash)}</dd>
+
+          <dt>Status</dt>
+          <dd>${App.badge(m.verification_status || 'PENDING')}</dd>
+        </dl>
+
+        ${expired ? '' : `
+          <div class="row" style="margin-bottom:16px">
+            <button class="btn" type="button" id="check-btn"
+              data-id="${Number(m.id)}">
+              Verify message
+            </button>
+          </div>
+        `}
+
+        <div id="report">${report}</div>
+
+      </div>
     `;
   }
 
@@ -220,6 +257,7 @@
     ) {
       selectedId = null;
       lastResult = null;
+      detailCollapsed = false;
     }
 
     renderList();
@@ -236,6 +274,7 @@
     lastResult = result.data;
   }
 
+  // Select a message from the inbox list.
   $('list').addEventListener('click', event => {
     const row = event.target.closest('.msg-row');
 
@@ -243,12 +282,25 @@
 
     selectedId = Number(row.dataset.id);
     lastResult = null;
+    detailCollapsed = false;
 
     renderList();
     renderDetail();
   });
 
+  // Handle detail panel actions.
   $('detail').addEventListener('click', async event => {
+
+    // Collapse or expand the detail panel.
+    const toggleButton = event.target.closest('#toggle-detail');
+
+    if (toggleButton) {
+      detailCollapsed = !detailCollapsed;
+      renderDetail();
+      return;
+    }
+
+    // Download attachments.
     const downloadButton =
       event.target.closest('.download-attachment');
 
@@ -271,6 +323,7 @@
       return;
     }
 
+    // Verify selected message.
     const button = event.target.closest('#check-btn');
 
     if (!button) return;
@@ -290,7 +343,6 @@
     try {
       await runCheck(Number(button.dataset.id));
       await refresh();
-      renderDetail();
 
       App.toast('Verification completed.');
 
@@ -301,6 +353,7 @@
     }
   });
 
+  // Verify all unchecked messages.
   $('check-all').addEventListener('click', async event => {
     const button = event.currentTarget;
 
@@ -337,9 +390,11 @@
     }
   });
 
+  // Initial inbox loading.
   try {
     await refresh();
   } catch (error) {
     showError(error.message);
   }
+
 })();

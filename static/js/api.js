@@ -220,6 +220,118 @@ async sendMessage(messageData) {
     return this.request('/demo/attacks');
   },
 
+  async prepareInteractiveTampering() {
+    return this.request('/demo/message-tampering/prepare', { method: 'POST' });
+  },
+
+  async tamperInteractiveMessage(sessionId, modifiedMessage) {
+    return this.request(`/demo/message-tampering/${encodeURIComponent(sessionId)}/tamper`, {
+      method: 'POST',
+      body: JSON.stringify({ modified_message: modifiedMessage })
+    });
+  },
+
+  async runInteractiveTamperingCheck(sessionId, check) {
+    return this.request(`/demo/message-tampering/${encodeURIComponent(sessionId)}/check`, {
+      method: 'POST',
+      body: JSON.stringify({ check })
+    });
+  },
+
+  async completeInteractiveTampering(sessionId) {
+    return this.request(`/demo/message-tampering/${encodeURIComponent(sessionId)}/complete`, {
+      method: 'POST'
+    });
+  },
+
+  async prepareInteractiveForgery() {
+    return this.request('/demo/forged-signature/prepare', { method: 'POST' });
+  },
+
+  async createInteractiveForgery(sessionId) {
+    return this.request(`/demo/forged-signature/${encodeURIComponent(sessionId)}/create`, {
+      method: 'POST'
+    });
+  },
+
+  async submitInteractiveForgery(sessionId) {
+    return this.request(`/demo/forged-signature/${encodeURIComponent(sessionId)}/submit`, {
+      method: 'POST'
+    });
+  },
+
+  async verifyInteractiveForgery(sessionId) {
+    return this.request(`/demo/forged-signature/${encodeURIComponent(sessionId)}/verify`, {
+      method: 'POST'
+    });
+  },
+
+  async completeInteractiveForgery(sessionId) {
+    return this.request(`/demo/forged-signature/${encodeURIComponent(sessionId)}/complete`, {
+      method: 'POST'
+    });
+  },
+
+  async prepareInteractiveReplay() {
+    return this.request('/demo/replay/prepare', { method: 'POST' });
+  },
+  async acceptInteractiveReplay(sessionId) {
+    return this.request(`/demo/replay/${encodeURIComponent(sessionId)}/accept`, { method: 'POST' });
+  },
+  async submitInteractiveReplay(sessionId) {
+    return this.request(`/demo/replay/${encodeURIComponent(sessionId)}/submit`, { method: 'POST' });
+  },
+  async verifyInteractiveReplay(sessionId) {
+    return this.request(`/demo/replay/${encodeURIComponent(sessionId)}/verify`, { method: 'POST' });
+  },
+  async completeInteractiveReplay(sessionId) {
+    return this.request(`/demo/replay/${encodeURIComponent(sessionId)}/complete`, { method: 'POST' });
+  },
+
+  async prepareInteractiveExpiredSignature() {
+    return this.request('/demo/expired-signature/prepare', { method: 'POST' });
+  },
+  async submitInteractiveExpiredSignature(sessionId) {
+    return this.request(`/demo/expired-signature/${encodeURIComponent(sessionId)}/submit`, { method: 'POST' });
+  },
+  async verifyInteractiveExpiredSignature(sessionId) {
+    return this.request(`/demo/expired-signature/${encodeURIComponent(sessionId)}/verify`, { method: 'POST' });
+  },
+  async completeInteractiveExpiredSignature(sessionId) {
+    return this.request(`/demo/expired-signature/${encodeURIComponent(sessionId)}/complete`, { method: 'POST' });
+  },
+
+  async prepareInteractiveRevokedKey() {
+    return this.request('/demo/revoked-key/prepare', { method: 'POST' });
+  },
+  async revokeInteractiveDemoKey(sessionId) {
+    return this.request(`/demo/revoked-key/${encodeURIComponent(sessionId)}/revoke`, { method: 'POST' });
+  },
+  async submitInteractiveRevokedPacket(sessionId) {
+    return this.request(`/demo/revoked-key/${encodeURIComponent(sessionId)}/submit`, { method: 'POST' });
+  },
+  async verifyInteractiveRevokedPacket(sessionId) {
+    return this.request(`/demo/revoked-key/${encodeURIComponent(sessionId)}/verify`, { method: 'POST' });
+  },
+  async completeInteractiveRevokedKey(sessionId) {
+    return this.request(`/demo/revoked-key/${encodeURIComponent(sessionId)}/complete`, { method: 'POST' });
+  },
+
+  async prepareInteractiveLedgerTampering() {
+    return this.request('/demo/ledger-tampering/prepare', { method: 'POST' });
+  },
+  async tamperInteractiveLedgerRecord(sessionId, modifiedDetails) {
+    return this.request(`/demo/ledger-tampering/${encodeURIComponent(sessionId)}/tamper`, {
+      method: 'POST', body: JSON.stringify({ modified_details: modifiedDetails })
+    });
+  },
+  async verifyInteractiveLedgerChain(sessionId) {
+    return this.request(`/demo/ledger-tampering/${encodeURIComponent(sessionId)}/verify`, { method: 'POST' });
+  },
+  async completeInteractiveLedgerTampering(sessionId) {
+    return this.request(`/demo/ledger-tampering/${encodeURIComponent(sessionId)}/complete`, { method: 'POST' });
+  },
+
   async runDemoAttack(attackType) {
   return this.request(`/demo/attacks/${encodeURIComponent(attackType)}`, {
     method: 'POST'

@@ -23,7 +23,37 @@ from flask_jwt_extended import (
 from app.services.demo_service import (
     simulate_attack,
     simulate_ledger_tampering,
-    ATTACKS
+    ATTACKS,
+)
+
+from app.services.interactive_demo_service import (
+    prepare_interactive_tampering,
+    tamper_interactive_message,
+    run_interactive_tampering_check,
+    complete_interactive_tampering,
+    prepare_interactive_forgery,
+    create_interactive_forged_signature,
+    submit_interactive_forged_signature,
+    verify_interactive_forged_signature,
+    complete_interactive_forgery,
+    prepare_interactive_replay,
+    accept_interactive_replay_original,
+    submit_interactive_replay,
+    verify_interactive_replay,
+    complete_interactive_replay,
+    prepare_interactive_expired_signature,
+    submit_interactive_expired_signature,
+    verify_interactive_expired_signature,
+    complete_interactive_expired_signature,
+    prepare_interactive_revoked_key,
+    revoke_interactive_demo_key,
+    submit_interactive_revoked_packet,
+    verify_interactive_revoked_packet,
+    complete_interactive_revoked_key,
+    prepare_interactive_ledger_tampering,
+    tamper_interactive_ledger_record,
+    verify_interactive_ledger_chain,
+    complete_interactive_ledger_tampering,
 )
 
 from app.extensions import db
@@ -844,6 +874,239 @@ def run_demo_attack(attack_type):
         "result": result
     }), 200
 
+
+
+# -----------------------------------------
+# INTERACTIVE MESSAGE TAMPERING LAB
+# -----------------------------------------
+
+@api_bp.route("/demo/message-tampering/prepare", methods=["POST"])
+@jwt_required()
+def prepare_message_tampering_demo():
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    try:
+        return jsonify({"result": prepare_interactive_tampering()}), 200
+    except Exception:
+        current_app.logger.exception("Unable to prepare interactive tampering demo")
+        return jsonify({"error": "Unable to prepare the message tampering demo"}), 500
+
+
+@api_bp.route("/demo/message-tampering/<session_id>/tamper", methods=["POST"])
+@jwt_required()
+def tamper_message_tampering_demo(session_id):
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    result, error = tamper_interactive_message(session_id, payload.get("modified_message"))
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"result": result}), 200
+
+
+@api_bp.route("/demo/message-tampering/<session_id>/check", methods=["POST"])
+@jwt_required()
+def check_message_tampering_demo(session_id):
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    result, error = run_interactive_tampering_check(session_id, payload.get("check"))
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"result": result}), 200
+
+
+@api_bp.route("/demo/message-tampering/<session_id>/complete", methods=["POST"])
+@jwt_required()
+def complete_message_tampering_demo(session_id):
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    result, error = complete_interactive_tampering(session_id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"result": result}), 200
+
+
+
+
+# -----------------------------------------
+# INTERACTIVE FORGED SIGNATURE LAB
+# -----------------------------------------
+
+@api_bp.route("/demo/forged-signature/prepare", methods=["POST"])
+@jwt_required()
+def prepare_forged_signature_demo():
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    try:
+        return jsonify({"result": prepare_interactive_forgery()}), 200
+    except Exception:
+        current_app.logger.exception("Unable to prepare forged signature demo")
+        return jsonify({"error": "Unable to prepare the forged signature demo"}), 500
+
+
+@api_bp.route("/demo/forged-signature/<session_id>/create", methods=["POST"])
+@jwt_required()
+def create_forged_signature_demo(session_id):
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    result, error = create_interactive_forged_signature(session_id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"result": result}), 200
+
+
+@api_bp.route("/demo/forged-signature/<session_id>/submit", methods=["POST"])
+@jwt_required()
+def submit_forged_signature_demo(session_id):
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    result, error = submit_interactive_forged_signature(session_id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"result": result}), 200
+
+
+@api_bp.route("/demo/forged-signature/<session_id>/verify", methods=["POST"])
+@jwt_required()
+def verify_forged_signature_demo(session_id):
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    result, error = verify_interactive_forged_signature(session_id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"result": result}), 200
+
+
+@api_bp.route("/demo/forged-signature/<session_id>/complete", methods=["POST"])
+@jwt_required()
+def complete_forged_signature_demo(session_id):
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    result, error = complete_interactive_forgery(session_id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"result": result}), 200
+
+# -----------------------------------------
+# INTERACTIVE REPLAY ATTACK LAB
+# -----------------------------------------
+
+@api_bp.route("/demo/replay/prepare", methods=["POST"])
+@jwt_required()
+def prepare_replay_demo():
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    return jsonify({"result": prepare_interactive_replay()}), 200
+
+
+@api_bp.route("/demo/replay/<session_id>/accept", methods=["POST"])
+@jwt_required()
+def accept_replay_original_demo(session_id):
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    result, error = accept_interactive_replay_original(session_id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"result": result}), 200
+
+
+@api_bp.route("/demo/replay/<session_id>/submit", methods=["POST"])
+@jwt_required()
+def submit_replay_demo(session_id):
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    result, error = submit_interactive_replay(session_id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"result": result}), 200
+
+
+@api_bp.route("/demo/replay/<session_id>/verify", methods=["POST"])
+@jwt_required()
+def verify_replay_demo(session_id):
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    result, error = verify_interactive_replay(session_id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"result": result}), 200
+
+
+@api_bp.route("/demo/replay/<session_id>/complete", methods=["POST"])
+@jwt_required()
+def complete_replay_demo(session_id):
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    result, error = complete_interactive_replay(session_id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"result": result}), 200
+
+
+# -----------------------------------------
+# INTERACTIVE EXPIRED SIGNATURE LAB
+# -----------------------------------------
+
+@api_bp.route("/demo/expired-signature/prepare", methods=["POST"])
+@jwt_required()
+def prepare_expired_signature_demo():
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    return jsonify({"result": prepare_interactive_expired_signature()}), 200
+
+
+@api_bp.route("/demo/expired-signature/<session_id>/submit", methods=["POST"])
+@jwt_required()
+def submit_expired_signature_demo(session_id):
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    result, error = submit_interactive_expired_signature(session_id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"result": result}), 200
+
+
+@api_bp.route("/demo/expired-signature/<session_id>/verify", methods=["POST"])
+@jwt_required()
+def verify_expired_signature_demo(session_id):
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    result, error = verify_interactive_expired_signature(session_id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"result": result}), 200
+
+
+@api_bp.route("/demo/expired-signature/<session_id>/complete", methods=["POST"])
+@jwt_required()
+def complete_expired_signature_demo(session_id):
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    result, error = complete_interactive_expired_signature(session_id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"result": result}), 200
+
+
 # -----------------------------------------
 # 13. LEDGER TAMPERING SIMULATION
 # -----------------------------------------
@@ -950,3 +1213,115 @@ def download_attachment(message_id, attachment_id):
         as_attachment=True,
         download_name=attachment.original_filename
     )
+
+
+# -----------------------------------------
+# INTERACTIVE REVOKED DIGITAL KEY LAB
+# -----------------------------------------
+
+@api_bp.route("/demo/revoked-key/prepare", methods=["POST"])
+@jwt_required()
+def prepare_revoked_key_demo():
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    return jsonify({"result": prepare_interactive_revoked_key()}), 200
+
+
+@api_bp.route("/demo/revoked-key/<session_id>/revoke", methods=["POST"])
+@jwt_required()
+def revoke_demo_signing_key(session_id):
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    result, error = revoke_interactive_demo_key(session_id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"result": result}), 200
+
+
+@api_bp.route("/demo/revoked-key/<session_id>/submit", methods=["POST"])
+@jwt_required()
+def submit_revoked_key_packet_demo(session_id):
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    result, error = submit_interactive_revoked_packet(session_id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"result": result}), 200
+
+
+@api_bp.route("/demo/revoked-key/<session_id>/verify", methods=["POST"])
+@jwt_required()
+def verify_revoked_key_packet_demo(session_id):
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    result, error = verify_interactive_revoked_packet(session_id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"result": result}), 200
+
+
+@api_bp.route("/demo/revoked-key/<session_id>/complete", methods=["POST"])
+@jwt_required()
+def complete_revoked_key_demo(session_id):
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    result, error = complete_interactive_revoked_key(session_id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"result": result}), 200
+
+
+
+# -----------------------------------------
+# INTERACTIVE LEDGER TAMPERING LAB
+# -----------------------------------------
+
+@api_bp.route("/demo/ledger-tampering/prepare", methods=["POST"])
+@jwt_required()
+def prepare_ledger_tampering_demo():
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    return jsonify({"result": prepare_interactive_ledger_tampering()}), 200
+
+
+@api_bp.route("/demo/ledger-tampering/<session_id>/tamper", methods=["POST"])
+@jwt_required()
+def tamper_ledger_demo_record(session_id):
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    data = request.get_json(silent=True) or {}
+    result, error = tamper_interactive_ledger_record(session_id, data.get("modified_details"))
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"result": result}), 200
+
+
+@api_bp.route("/demo/ledger-tampering/<session_id>/verify", methods=["POST"])
+@jwt_required()
+def verify_ledger_demo_chain(session_id):
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    result, error = verify_interactive_ledger_chain(session_id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"result": result}), 200
+
+
+@api_bp.route("/demo/ledger-tampering/<session_id>/complete", methods=["POST"])
+@jwt_required()
+def complete_ledger_tampering_demo(session_id):
+    current_user, error_response = admin_required()
+    if error_response:
+        return error_response
+    result, error = complete_interactive_ledger_tampering(session_id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"result": result}), 200

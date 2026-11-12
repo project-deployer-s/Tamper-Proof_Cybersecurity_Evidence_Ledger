@@ -1,0 +1,264 @@
+/* Attack demonstration page */
+.demo-page { max-width: 1320px; }
+.demo-notice {
+  margin: 0 0 22px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent, #64748b);
+  border-radius: 8px;
+  background: var(--paper);
+}
+.demo-notice strong { display: block; margin-bottom: 5px; }
+.demo-notice p { margin: 0; color: var(--ink-2); font-size: .9rem; line-height: 1.55; }
+.attack-grid { align-items: start; }
+.attack { min-width: 0; }
+.attack-heading { display: flex; align-items: flex-start; gap: 13px; margin-bottom: 16px; }
+.attack-heading h2 { margin: 0 0 6px; }
+.attack-heading .why { margin: 0; }
+.attack-number {
+  display: grid;
+  place-items: center;
+  flex: 0 0 38px;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.attack-result { min-width: 0; }
+.demo-result { display: grid; gap: 14px; margin-top: 14px; }
+.demo-verdict {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+}
+.demo-verdict.is-detected { border-left: 4px solid #16834a; }
+.demo-verdict.is-unexpected { border-left: 4px solid #b7791f; }
+.demo-verdict-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 50%;
+  background: var(--line);
+  font-weight: 700;
+}
+.demo-verdict.is-detected .demo-verdict-icon { color: #16834a; }
+.demo-verdict.is-unexpected .demo-verdict-icon { color: #b7791f; }
+.demo-verdict strong { display: block; }
+.demo-verdict p { margin: 4px 0 0; color: var(--ink-2); font-size: .88rem; line-height: 1.5; }
+.demo-section {
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  min-width: 0;
+}
+.demo-section h3 { margin: 0 0 10px; font-size: 1rem; }
+.demo-explanation { margin: 0 0 12px; color: var(--ink-2); font-size: .9rem; line-height: 1.55; }
+.demo-action-box {
+  padding: 12px;
+  margin: 10px 0;
+  border: 1px dashed var(--line);
+  border-radius: 7px;
+  background: var(--paper-2, transparent);
+}
+.demo-action-box p { margin: 5px 0 0; line-height: 1.5; }
+.demo-section-label {
+  display: block;
+  color: var(--ink-2);
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  margin-bottom: 7px;
+}
+.demo-two-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.demo-data-card {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  overflow-wrap: anywhere;
+}
+.demo-data-changed { border-color: #c58b39; background: rgba(197, 139, 57, .06); }
+.demo-message { margin: 0; font-weight: 700; line-height: 1.5; }
+.demo-data-card pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+  font: .8rem/1.5 var(--mono);
+}
+.demo-hash-grid, .demo-kv-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.demo-kv {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.demo-kv span { color: var(--ink-2); font-size: .76rem; }
+.demo-kv strong { font-size: .84rem; overflow-wrap: anywhere; }
+.demo-kv .demo-hash, .demo-hash { font: .74rem/1.45 var(--mono); }
+.demo-text-good { color: #16834a; }
+.demo-text-bad { color: #c0392b; }
+.demo-text-warn { color: #a66a13; }
+.demo-verdict-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.demo-timeline { list-style: none; margin: 0; padding: 0; }
+.demo-timeline-item { position: relative; display: flex; gap: 11px; padding: 0 0 15px; }
+.demo-timeline-item:last-child { padding-bottom: 0; }
+.demo-timeline-item:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 28px;
+  bottom: 0;
+  left: 13px;
+  width: 1px;
+  background: var(--line);
+}
+.demo-timeline-marker {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  flex: 0 0 27px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  font-weight: 700;
+}
+.demo-status-passed { color: #16834a; }
+.demo-status-failed { color: #c0392b; }
+.demo-status-muted { color: var(--ink-2); }
+.demo-timeline-content { flex: 1; min-width: 0; padding-top: 2px; }
+.demo-timeline-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.demo-timeline-heading strong { font-size: .88rem; }
+.demo-status { font-size: .72rem; font-weight: 700; white-space: nowrap; }
+.demo-timeline-content p { margin: 5px 0 0; color: var(--ink-2); font-size: .84rem; line-height: 1.5; }
+.demo-timeline-content code { display: block; margin-top: 6px; overflow-wrap: anywhere; }
+.demo-evidence-card { padding: 10px; border: 1px solid var(--line); border-radius: 7px; }
+.demo-evidence-card .demo-kv { border: 0; padding: 5px 2px; }
+.demo-small-note { margin: 8px 2px 2px; color: var(--ink-2); font-size: .8rem; line-height: 1.5; }
+.demo-safety-grid { display: flex; flex-wrap: wrap; gap: 8px 15px; margin-top: 12px; color: var(--ink-2); font-size: .78rem; }
+.demo-safety-grid strong { color: var(--ink); }
+.demo-final-explanation { margin: 10px 0 0; font-size: .88rem; line-height: 1.55; }
+.demo-bullet-list { padding-left: 20px; margin: 8px 0; color: var(--ink-2); font-size: .86rem; line-height: 1.6; }
+@media (max-width: 760px) {
+  .attack-grid { grid-template-columns: 1fr; }
+  .demo-two-columns, .demo-hash-grid, .demo-kv-grid, .demo-verdict-strip { grid-template-columns: 1fr; }
+  .demo-timeline-heading { align-items: flex-start; }
+}
+
+
+/* Minimal independent collapse controls for interactive investigation steps */
+.tamper-wizard .demo-step-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.tamper-wizard .demo-step-header h3 {
+  min-width: 0;
+  margin: 0;
+}
+
+.tamper-wizard .demo-step-content {
+  min-width: 0;
+}
+
+.tamper-wizard .demo-step-toggle {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+  font: inherit;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.tamper-wizard .demo-step-toggle:hover {
+  background: var(--paper-2, rgba(100, 116, 139, .12));
+  color: var(--ink);
+}
+
+.tamper-wizard .demo-step-toggle:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.tamper-wizard .demo-step-toggle span {
+  display: block;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.tamper-wizard .demo-section.is-step-collapsed .demo-step-content {
+  max-height: 170px;
+  overflow: hidden;
+  position: relative;
+}
+
+.tamper-wizard .demo-section.is-step-collapsed .demo-step-content::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 42px;
+  pointer-events: none;
+  background: linear-gradient(transparent, var(--paper));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tamper-wizard .demo-step-content {
+    transition: max-height 180ms ease;
+  }
+}
+
+
+/* Manual forged-signature investigation uses the shared global-collapse layout. */
+.forgery-wizard { display: grid; gap: 12px; margin-top: 14px; min-width: 0; }
+.forgery-step { min-width: 0; }
+
+/* Global collapse control for Message Tampering */
+.tamper-global-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 0 8px;
+}
+.tamper-global-toolbar .demo-small-note { margin: 0; }
+.tamper-steps-container.is-globally-collapsed .demo-section,
+.tamper-steps-container.is-globally-collapsed .tamper-progress {
+  display: none;
+}
+.tamper-wizard:has(.tamper-steps-container.is-globally-collapsed) .demo-actions-row {
+  margin-top: 0;
+}
+
+
+/* Consistent single global collapse control for every completed demo window */
+.demo-global-window { display: grid; gap: 10px; min-width: 0; }
+.demo-global-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 2px 0 8px; }
+.demo-global-toolbar .demo-small-note { margin: 0; }
+.demo-global-toolbar .demo-global-toggle { display: inline-grid; place-items: center; flex: 0 0 28px; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ink-2); cursor: pointer; font: inherit; }
+.demo-global-toolbar .demo-global-toggle:hover { background: var(--paper-2, rgba(100,116,139,.12)); color: var(--ink); }
+.demo-global-toolbar .demo-global-toggle span { font-size: 19px; line-height: 1; }
+.demo-global-window-content.is-collapsed { display: none; }

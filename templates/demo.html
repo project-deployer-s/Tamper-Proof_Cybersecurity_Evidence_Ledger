@@ -8,108 +8,116 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/styles.css">
+  <link rel="stylesheet" href="/static/css/demo.css">
 </head>
 
 <body>
   <div class="shell">
     <nav class="rail" id="rail" aria-label="Main"></nav>
 
-    <main class="main">
+    <main class="main demo-page">
       <header class="page-head">
         <h1>Attack Demonstrations</h1>
         <p>
-          Explore how the Evidence Ledger detects common cybersecurity
-          attacks using ECDSA digital signatures and message verification.
+          Run safe, isolated attack simulations and follow the attack,
+          detection checks, and evidence-integrity result step by step.
         </p>
       </header>
 
+      <section class="demo-notice" aria-label="Simulation safety notice">
+        <strong>Isolated simulation environment</strong>
+        <p>
+          These demonstrations use temporary sample data. They do not attack
+          real systems, modify user messages, revoke real keys, or change the
+          permanent evidence ledger. A demo evidence ID is not a permanent
+          ledger record.
+        </p>
+      </section>
+
       <div class="attack-grid">
         <section class="panel attack">
-          <h2>1. Message Tampering</h2>
-          <p class="why">
-            An attacker modifies a message after it has been signed.
-            The original hash no longer matches the message.
-          </p>
-          <button class="btn danger" id="attack-tampering" type="button">
-            Simulate Message Tampering
-          </button>
-          <div class="attack-result" id="result-tampering" aria-live="polite"></div>
+          <div class="attack-heading">
+            <span class="attack-number">01</span>
+            <div>
+              <h2>Message Tampering</h2>
+              <p class="why">See what happens when someone changes a signed message after it was created.</p>
+            </div>
+          </div>
+          <div class="attack-result" id="result-tampering" aria-live="polite">
+            <div class="tamper-wizard">
+              <p class="demo-explanation">You will prepare a signed message, manually alter it, submit it, and run each security check yourself.</p>
+              <button class="btn danger" id="tamper-prepare" type="button">1. Prepare Original Message</button>
+              <p class="demo-small-note">No attack is performed until you edit and submit the message.</p>
+            </div>
+          </div>
         </section>
 
         <section class="panel attack">
-          <h2>2. Forged Digital Signature</h2>
-          <p class="why">
-            An attacker signs a message using an unauthorized private key.
-            The receiver's public key cannot verify the signature.
-          </p>
-          <button class="btn danger" id="attack-forged_signature" type="button">
-            Simulate Signature Forgery
-          </button>
-          <div class="attack-result" id="result-forged_signature" aria-live="polite"></div>
+          <div class="attack-heading">
+            <span class="attack-number">02</span>
+            <div>
+              <h2>Forged Digital Signature</h2>
+              <p class="why">See why a signature made with an unrelated private key cannot prove the sender's identity.</p>
+            </div>
+          </div>
+          <div class="attack-result" id="result-forged_signature" aria-live="polite">
+            <div class="forgery-wizard">
+              <p class="demo-explanation">Follow the investigation manually: inspect Alice's original signature, create a signature with an unrelated key, submit it, and run identity verification yourself.</p>
+              <button class="btn danger" id="forgery-prepare" type="button">1. Prepare Original Message</button>
+              <p class="demo-small-note">This creates temporary demo keys only. No attack or verification happens automatically.</p>
+            </div>
+          </div>
         </section>
 
         <section class="panel attack">
-          <h2>3. Replay Attack</h2>
-          <p class="why">
-            An attacker attempts to submit a previously used message
-            with the same nonce.
-          </p>
-          <button class="btn danger" id="attack-replay" type="button">
-            Simulate Replay Attack
-          </button>
-          <div class="attack-result" id="result-replay" aria-live="polite"></div>
+          <div class="attack-heading">
+            <span class="attack-number">03</span>
+            <div>
+              <h2>Replay Attack</h2>
+              <p class="why">See how the system detects a previously used message nonce being submitted again.</p>
+            </div>
+          </div>
+          <div class="attack-result" id="result-replay" aria-live="polite">
+            <div class="replay-wizard">
+              <p class="demo-explanation">Follow the packet lifecycle manually: prepare a signed message, accept it once, replay the exact same packet, and run nonce verification.</p>
+              <button class="btn danger" id="replay-prepare" type="button">1. Prepare Original Packet</button>
+              <p class="demo-small-note">All data and keys are temporary. No real message or permanent ledger entry is used.</p>
+            </div>
+          </div>
         </section>
 
         <section class="panel attack">
-          <h2>4. Expired Message</h2>
-          <p class="why">
-            An attacker attempts to reuse a message with an expired
-            timestamp.
-          </p>
-          <button class="btn danger" id="attack-expired" type="button">
-            Simulate Expired Message
-          </button>
+          <div class="attack-heading">
+            <span class="attack-number">04</span>
+            <div>
+              <h2>Expired Digital Signature</h2>
+              <p class="why">See how the verification freshness window rejects an expired signed message.</p>
+            </div>
+          </div>
           <div class="attack-result" id="result-expired" aria-live="polite"></div>
         </section>
 
         <section class="panel attack">
-          <h2>5. Revoked Public Key</h2>
-          <p class="why">
-            An attacker attempts to use a signing key that has
-            already been revoked.
-          </p>
-          <button class="btn danger" id="attack-revoked_key" type="button">
-            Simulate Revoked Key Attack
-          </button>
+          <div class="attack-heading">
+            <span class="attack-number">05</span>
+            <div>
+              <h2>Revoked Key Attack</h2>
+              <p class="why">See how a revoked signing key is rejected even if it was once trusted.</p>
+            </div>
+          </div>
           <div class="attack-result" id="result-revoked_key" aria-live="polite"></div>
         </section>
 
         <section class="panel attack">
-  <h2>6. Ledger Tampering</h2>
-
-  <p class="why">
-    Demonstrates how an attacker can modify a ledger entry
-    and even recalculate the hash chain. The independent
-    external anchor detects the rewritten chain.
-  </p>
-
-  <button class="btn danger" id="attack-ledger-tampering" type="button">
-    Simulate Ledger Tampering
-  </button>
-
-  <div class="attack-result" id="result-ledger-tampering"
-       aria-live="polite"></div>
-</section>
-
-        <section class="panel">
-          <h2>Simulation Information</h2>
-          <p class="hint">
-            These demonstrations generate temporary cryptographic data.
-            They do not modify registered users, real messages,
-            database records, or the permanent evidence ledger.
-          </p>
+          <div class="attack-heading">
+            <span class="attack-number">06</span>
+            <div>
+              <h2>Ledger Tampering</h2>
+              <p class="why">Compare direct record modification with an attacker who also recalculates the local hash chain.</p>
+            </div>
+          </div>
+          <div class="attack-result" id="result-ledger-tampering" aria-live="polite"></div>
         </section>
-
       </div>
     </main>
   </div>
