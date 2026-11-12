@@ -223,3 +223,100 @@ window.loadPrivateKey = loadPrivateKey;
 window.setupKeys = setupKeys;
 window.importPrivateKey = importPrivateKey;
 window.matchesPublicKey = matchesPublicKey;
+
+// Hybrid backup format: PBKDF2-SHA256 -> AES-256-GCM, entirely in the browser.
+const KEY_BACKUP_ITERATIONS = 600000;
+
+async function deriveRecoveryKey(password, salt, iterations = KEY_BACKUP_ITERATIONS) {
+    if (typeof password !== 'string' || password.length < 12) {
+        throw new Error('Recovery password must contain at least 12 characters.');
+    }
+    const material = await crypto.subtle.importKey(
+        'raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']
+    );
+    return crypto.subtle.deriveKey(
+        { name: 'PBKDF2', hash: 'SHA-256', salt, iterations },
+        material,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+    );
+}
+
+async function createEncryptedKeyBackup(privateKey, password, userId, publicKeyId) {
+    if (!validateSigningKey(privateKey)) throw new Error('Cannot back up an invalid signing key.');
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const aad = new TextEncoder().encode(`evidence-ledger-key-backup:v1:${userId}:${publicKeyId}`);
+    const aesKey = await deriveRecoveryKey(password, salt);
+    const pkcs8 = await crypto.subtle.exportKey('pkcs8', privateKey);
+    const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv, additionalData: aad, tagLength: 128 }, aesKey, pkcs8
+    );
+    return {
+        public_key_id: Number(publicKeyId),
+        ciphertext: bytesToBase64(new Uint8Array(ciphertext)),
+        salt: bytesToBase64(salt),
+        iv: bytesToBase64(iv),
+        kdf: 'PBKDF2-HMAC-SHA256',
+        iterations: KEY_BACKUP_ITERATIONS,
+        cipher: 'AES-256-GCM',
+        format_version: 1
+    };
+}
+
+async function decryptEncryptedKeyBackup(payload, password, userId) {
+    if (!payload || payload.format_version !== 1 || payload.kdf !== 'PBKDF2-HMAC-SHA256' || payload.cipher !== 'AES-256-GCM') {
+        throw new Error('Unsupported encrypted backup format.');
+    }
+    const iterations = Number(payload.iterations);
+    if (!Number.isInteger(iterations) || iterations < 600000 || iterations > 2000000) {
+        throw new Error('Encrypted backup has invalid security parameters.');
+    }
+    const salt = new Uint8Array(base64ToArrayBuffer(payload.salt));
+    const iv = new Uint8Array(base64ToArrayBuffer(payload.iv));
+    const ciphertext = base64ToArrayBuffer(payload.ciphertext);
+    if (salt.length !== 16 || iv.length !== 12 || ciphertext.byteLength < 17) {
+        throw new Error('Encrypted backup data is malformed.');
+    }
+    const aad = new TextEncoder().encode(`evidence-ledger-key-backup:v1:${userId}:${payload.public_key_id}`);
+    const aesKey = await deriveRecoveryKey(password, salt, iterations);
+    let plaintext;
+    try {
+        plaintext = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv, additionalData: aad, tagLength: 128 }, aesKey, ciphertext
+        );
+    } catch (_) {
+        throw new Error('Recovery password is incorrect or the encrypted backup has been modified.');
+    }
+    const privateKey = await crypto.subtle.importKey(
+        'pkcs8', plaintext, { name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign']
+    );
+    if (!validateSigningKey(privateKey)) throw new Error('Recovered data is not a valid signing key.');
+    return privateKey;
+}
+
+function downloadEncryptedKeyBackup(payload) {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'evidence-ledger-encrypted-key-backup.json';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+window.createEncryptedKeyBackup = createEncryptedKeyBackup;
+window.decryptEncryptedKeyBackup = decryptEncryptedKeyBackup;
+window.downloadEncryptedKeyBackup = downloadEncryptedKeyBackup;
+
+async function lockPrivateKeyForLocalStorage(privateKey) {
+    if (!validateSigningKey(privateKey)) {
+        throw new Error('Invalid signing key.');
+    }
+
+    return privateKey;
+}
+window.lockPrivateKeyForLocalStorage = lockPrivateKeyForLocalStorage;

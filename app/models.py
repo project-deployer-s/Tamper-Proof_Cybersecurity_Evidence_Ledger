@@ -47,6 +47,12 @@ class User(db.Model):
         cascade="save-update, merge"
     )
 
+    encrypted_key_backups = db.relationship(
+        "EncryptedKeyBackup",
+        back_populates="owner",
+        cascade="save-update, merge"
+    )
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
@@ -107,6 +113,49 @@ class PublicKey(db.Model):
 
     def __repr__(self):
         return f"<PublicKey {self.id}>"
+
+
+class EncryptedKeyBackup(db.Model):
+    """Client-encrypted signing-key backup; the server never receives plaintext."""
+
+    __tablename__ = "encrypted_key_backups"
+    __table_args__ = (
+        db.UniqueConstraint(
+            "user_id", "public_key_id",
+            name="uq_encrypted_key_backup_user_public_key"
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    public_key_id = db.Column(
+        db.Integer, db.ForeignKey("public_keys.id"), nullable=False, index=True
+    )
+    ciphertext = db.Column(db.Text, nullable=False)
+    salt = db.Column(db.String(64), nullable=False)
+    iv = db.Column(db.String(64), nullable=False)
+    kdf = db.Column(db.String(40), nullable=False, default="PBKDF2-HMAC-SHA256")
+    iterations = db.Column(db.Integer, nullable=False)
+    cipher = db.Column(db.String(40), nullable=False, default="AES-256-GCM")
+    format_version = db.Column(db.Integer, nullable=False, default=1)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False,
+        default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True), nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc)
+    )
+
+    owner = db.relationship("User", back_populates="encrypted_key_backups")
+    signing_key = db.relationship("PublicKey")
+
+    def __repr__(self):
+        return f"<EncryptedKeyBackup user={self.user_id} key={self.public_key_id}>"
+
 
 class Message(db.Model):
     __tablename__ = "messages"

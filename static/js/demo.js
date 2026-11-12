@@ -896,26 +896,36 @@
         </div>
       </section>` : ''}`;
 
-    output.innerHTML = `
+    
+      output.innerHTML = `
       <div class="forgery-wizard">
-        <div class="forgery-global-toolbar">
-          <span class="demo-small-note">Manual investigation · ${forgeryState.completed ? 'Completed' : 'In progress'}</span>
-          <button class="demo-global-toggle" id="forgery-toggle-all" type="button" aria-label="${forgeryCollapsedAll ? 'Expand all steps' : 'Collapse all steps'}" title="${forgeryCollapsedAll ? 'Expand all' : 'Collapse all'}"><span aria-hidden="true">${forgeryCollapsedAll ? '⌄' : '⌃'}</span></button>
-        </div>
-        ${sections}
-        <div class="demo-actions-row">
-          <button class="btn" id="forgery-reset" type="button">Reset and Start Again</button>
-        </div>
-      </div>`;
+      <div class="tamper-global-toolbar">
+      <span class="demo-small-note">
+        Manual investigation · ${forgeryState.completed ? 'Completed' : 'In progress'}
+      </span>
 
-    const stepNodes = output.querySelectorAll('.forgery-step');
-    stepNodes.forEach((section, index) => {
-      const body = section.querySelector('.forgery-step-body');
-      const shouldCollapse = forgeryCollapsedAll;
-      section.classList.toggle('is-forgery-collapsed', shouldCollapse);
-      body.hidden = shouldCollapse;
-    });
-  }
+      <button
+        class="demo-global-toggle"
+        id="forgery-toggle-all"
+        type="button"
+        aria-label="${forgeryCollapsedAll ? 'Expand all steps' : 'Collapse all steps'}"
+        title="${forgeryCollapsedAll ? 'Expand all' : 'Collapse all'}"
+      >
+        <span aria-hidden="true">${forgeryCollapsedAll ? '⌄' : '⌃'}</span>
+      </button>
+      </div>
+
+      <div class="tamper-steps-container ${forgeryCollapsedAll ? 'is-globally-collapsed' : ''}">
+      ${sections}
+      </div>
+
+      <div class="demo-actions-row">
+      <button class="btn" id="forgery-reset" type="button">
+        Reset and Start Again
+      </button>
+      </div>
+      </div>`;
+    }
 
   let forgerySubmitExplanation = 'The forged signature was submitted. Verification has not run yet.';
 

@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -15,7 +16,9 @@
 
       <section>
         <h1>Check that a message is genuine and unchanged</h1>
-        <p class="lead" style="margin-top:12px">Every message is signed by its sender. The receiver can check the signature at any time, and every check is written to a ledger that nobody can quietly edit.</p>
+        <p class="lead" style="margin-top:12px">
+          Every message is signed by its sender. The receiver can check the signature at any time, and every check is written to a ledger that nobody can quietly edit.
+        </p>
         <ol class="steps">
           <li><strong>Sign.</strong> The sender's private key signs the message in their browser.</li>
           <li><strong>Send.</strong> The server stores the message and records it in the ledger.</li>
@@ -24,105 +27,207 @@
       </section>
 
       <section class="panel auth-panel" aria-labelledby="auth-title">
+
         <div class="tabs" role="tablist" aria-label="Account">
-          <button class="tab" role="tab" id="tab-signin" aria-selected="true" aria-controls="pane-signin" type="button">Sign in</button>
-          <button class="tab" role="tab" id="tab-signup" aria-selected="false" aria-controls="pane-signup" type="button">Create account</button>
+          <button class="tab" role="tab" id="tab-signin"
+                  aria-selected="true" aria-controls="pane-signin"
+                  type="button">Sign in</button>
+
+          <button class="tab" role="tab" id="tab-signup"
+                  aria-selected="false" aria-controls="pane-signup"
+                  type="button">Create account</button>
         </div>
 
         <!-- Sign in -->
-        <form id="pane-signin" role="tabpanel" aria-labelledby="tab-signin" novalidate>
+        <form id="pane-signin" role="tabpanel"
+              aria-labelledby="tab-signin" novalidate>
+
           <div class="field">
             <label for="si-user">Email address</label>
-            <input type="email" id="si-user" autocomplete="email" required>
+            <input type="email" id="si-user"
+                   autocomplete="email" required>
           </div>
+
           <div class="field">
             <label for="si-pass">Password</label>
-            <input type="password" id="si-pass" autocomplete="current-password" required>
+            <input type="password" id="si-pass"
+                   autocomplete="current-password" required>
           </div>
-          <p class="error-text" id="si-error" role="alert" hidden></p>
+
+          <p class="error-text" id="si-error"
+             role="alert" hidden></p>
+
           <button class="btn" type="submit">Sign in</button>
         </form>
 
         <!-- Create account -->
-        <form id="pane-signup" role="tabpanel" aria-labelledby="tab-signup" hidden novalidate>
+        <form id="pane-signup" role="tabpanel"
+              aria-labelledby="tab-signup" hidden novalidate>
+
           <div class="field">
-  <label for="su-email">Email address</label>
-  <input type="email" id="su-email" autocomplete="email" required>
-</div>
+            <label for="su-email">Email address</label>
+            <input type="email" id="su-email"
+                   autocomplete="email" required>
+          </div>
+
           <div class="field">
             <label for="su-user">Choose a username</label>
-            <input type="text" id="su-user" autocomplete="username" autocapitalize="none" required>
+            <input type="text" id="su-user"
+                   autocomplete="username"
+                   autocapitalize="none" required>
             <p class="hint">3 to 20 letters, numbers or underscores.</p>
           </div>
+
           <div class="field">
             <label for="su-pass">Choose a password</label>
-            <input type="password" id="su-pass" autocomplete="new-password" required>
+            <input type="password" id="su-pass"
+                   autocomplete="new-password" required>
             <p class="hint">At least 8 characters.</p>
           </div>
-          <p class="error-text" id="su-error" role="alert" hidden></p>
+
+          <p class="error-text" id="su-error"
+             role="alert" hidden></p>
+
           <button class="btn" type="submit">Create account</button>
         </form>
 
-        <!-- Key setup, shown after the account is created -->
+        <!-- Key setup -->
         <div id="pane-key" hidden>
-          <h2 id="auth-title">Create your signing key</h2>
-          <p class="fine" style="margin-top:6px">Your private key signs your messages and never leaves this browser. Only the public half goes to the server.</p>
+          <h2 id="key-setup-title">Create your signing key</h2>
+
+          <p class="fine" id="key-setup-description"
+             style="margin-top:6px">
+            Your private key signs your messages and never leaves this browser.
+            Only the public half goes to the server.
+          </p>
+
           <div class="row" style="margin:14px 0">
-            <button class="btn" type="button" id="make-key">Create my key pair</button>
+            <button class="btn" type="button" id="make-key">
+              Create my key pair
+            </button>
           </div>
+
           <div id="key-result" hidden>
             <div class="label">Your key fingerprint</div>
             <div class="fingerprint" id="fingerprint"></div>
-            <p class="hint">Check this fingerprint with the people you message, so they know your public key is really yours.</p>
+
+            <p class="hint">
+              Check this fingerprint with the people you message,
+              so they know your public key is really yours.
+            </p>
+
             <div class="row" style="margin-top:14px">
-              <button class="btn secondary" type="button" id="download-key">Download private key backup</button>
-              <a class="btn" href="inbox.html">Continue to inbox</a>
+              <button class="btn" type="button"
+                      id="continue-after-backup" hidden>
+                Continue to inbox
+              </button>
             </div>
-            <p class="hint">Keep the backup somewhere safe. If you lose your key you must revoke it and create a new one.</p>
+
+            <div id="recovery-setup" hidden>
+              <h3 style="margin-top:18px">
+                Set a separate recovery password
+              </h3>
+
+              <p class="hint">
+                Use at least 12 characters. Do not reuse your account password.
+                The server receives only encrypted key data.
+              </p>
+
+              <div class="field">
+                <label for="recovery-setup-password">
+                  Recovery password
+                </label>
+                <input id="recovery-setup-password"
+                       type="password" minlength="12"
+                       autocomplete="new-password">
+              </div>
+
+              <div class="field">
+                <label for="recovery-setup-confirm">
+                  Confirm recovery password
+                </label>
+                <input id="recovery-setup-confirm"
+                       type="password" minlength="12"
+                       autocomplete="new-password">
+              </div>
+
+              <p class="error-text" id="recovery-setup-error"
+                 role="alert" hidden></p>
+
+              <p id="recovery-setup-success"
+                 role="status" hidden></p>
+
+              <button class="btn" type="button" id="save-cloud-backup">
+                Create encrypted backup
+              </button>
+            </div>
           </div>
         </div>
 
-<!-- Restore an existing private key after signing in -->
-<div id="pane-restore" hidden>
-  <h2>Restore your signing key</h2>
+        <!-- Restore existing signing key -->
+        <div id="pane-restore" hidden>
 
-  <p class="fine" style="margin-top:6px">
-    Select your existing private-key backup.
-    Your key will be verified locally against your account's
-    active public key before being saved in this browser.
-  </p>
+          <h2>Restore your signing key</h2>
 
-  <div class="field" style="margin-top:14px">
-    <label for="key-backup-file">Private-key backup (.txt)</label>
-    <input
-      type="file"
-      id="key-backup-file"
-      accept=".txt,text/plain"
-    >
-  </div>
+          <p class="fine">
+            Enter the separate recovery password used when creating
+            your encrypted backup.
+          </p>
 
-  <p class="error-text" id="restore-error" role="alert" hidden></p>
-  <p id="restore-success" role="status" hidden></p>
+          <!-- Shared password field for cloud and JSON recovery -->
+          <div class="field">
+            <label for="restore-cloud-password">
+              Separate recovery password
+            </label>
 
-  <div class="row" style="margin-top:14px">
-    <button class="btn" type="button" id="restore-key">
-      Restore existing key
-    </button>
-    <a class="btn secondary" href="inbox.html">
-      Continue to inbox
-    </a>
-  </div>
-</div>
+            <input
+              id="restore-cloud-password"
+              type="password"
+              autocomplete="current-password"
+              minlength="12"
+            >
+
+            <p class="hint">
+              This password is used to decrypt your signing-key backup.
+              It is different from your account password.
+            </p>
+          </div>
+
+          <!-- Cloud recovery -->
+          <div id="restore-cloud" hidden>
+            <p class="fine" id="restore-cloud-info"></p>
+
+            <button class="btn" type="button" id="restore-cloud-key">
+              Restore from encrypted cloud backup
+            </button>
+
+            <hr style="margin:18px 0">
+          </div>
+
+          <!-- Error and success messages -->
+          <p class="error-text" id="restore-error"
+             role="alert" hidden></p>
+
+          <p id="restore-success"
+             role="status" hidden></p>
+
+          <!-- Shown only after successful recovery -->
+          <button class="btn" type="button"
+                  id="continue-after-restore" hidden>
+            Sign in
+          </button>
+
+        </div>
 
       </section>
-
     </div>
   </div>
+
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-<script src="/static/js/api.js"></script>
-<script src="/static/js/app.js"></script>
-<script src="/static/js/crypto.js"></script>
-<script src="/static/js/login.js"></script>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/app.js"></script>
+  <script src="/static/js/crypto.js"></script>
+  <script src="/static/js/login.js"></script>
 </body>
 </html>

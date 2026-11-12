@@ -391,6 +391,7 @@
   });
 
   // Initial inbox loading.
+
   try {
     await refresh();
   } catch (error) {

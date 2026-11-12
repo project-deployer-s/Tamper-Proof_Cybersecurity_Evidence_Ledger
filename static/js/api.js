@@ -137,6 +137,21 @@ async request(endpoint, options = {}) {
     return this.request(`/users/${user.id}/keys`);
   },
 
+  async getEncryptedKeyBackup(keyId) {
+    const user = this.currentUser();
+    if (!user || !keyId) return { ok: false, error: 'Account or public-key ID is missing.' };
+    return this.request(`/users/${user.id}/keys/${keyId}/backup`);
+  },
+
+  async saveEncryptedKeyBackup(keyId, backup) {
+    const user = this.currentUser();
+    if (!user || !keyId) return { ok: false, error: 'Account or public-key ID is missing.' };
+    return this.request(`/users/${user.id}/keys/${keyId}/backup`, {
+      method: 'PUT',
+      body: JSON.stringify(backup)
+    });
+  },
+
 
 async sendMessage(messageData) {
   if (messageData instanceof FormData) {

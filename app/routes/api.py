@@ -62,6 +62,7 @@ from app.models import (
     Message,
     MessageAttachment,
     PublicKey,
+    EncryptedKeyBackup,
     LedgerEntry,
     Alert
 )
@@ -331,6 +332,127 @@ def get_user_keys(user_id):
             }
             for key in keys
         ]
+    }), 200
+
+
+def _decode_backup_field(value, field_name, expected_length=None, max_length=16384):
+    """Validate a base64-encoded encrypted-backup field."""
+    if not isinstance(value, str) or not value or len(value) > max_length:
+        raise ValueError(f"Invalid {field_name}")
+    try:
+        decoded = base64.b64decode(value, validate=True)
+    except (ValueError, binascii.Error):
+        raise ValueError(f"Invalid {field_name}")
+    if expected_length is not None and len(decoded) != expected_length:
+        raise ValueError(f"Invalid {field_name} length")
+    return decoded
+
+
+@api_bp.route(
+    "/users/<int:user_id>/keys/<int:key_id>/backup",
+    methods=["GET", "PUT"]
+)
+@jwt_required()
+def encrypted_key_backup(user_id, key_id):
+    """Read or store an encrypted backup for the user's active signing key."""
+    if int(get_jwt_identity()) != user_id:
+        return jsonify({"error": "Access forbidden"}), 403
+
+    signing_key = PublicKey.query.filter_by(
+        id=key_id, user_id=user_id
+    ).first()
+    if not signing_key:
+        return jsonify({"error": "Public key not found"}), 404
+    if signing_key.is_revoked:
+        return jsonify({"error": "Cannot back up or restore a revoked key"}), 409
+    if signing_key.algorithm != "ECDSA-P256":
+        return jsonify({"error": "Unsupported signing-key algorithm"}), 400
+
+    backup = EncryptedKeyBackup.query.filter_by(
+        user_id=user_id, public_key_id=key_id
+    ).first()
+
+    if request.method == "GET":
+        if not backup:
+            return jsonify({"error": "Encrypted key backup not found"}), 404
+        return jsonify({
+            "backup": {
+                "public_key_id": backup.public_key_id,
+                "ciphertext": backup.ciphertext,
+                "salt": backup.salt,
+                "iv": backup.iv,
+                "kdf": backup.kdf,
+                "iterations": backup.iterations,
+                "cipher": backup.cipher,
+                "format_version": backup.format_version,
+                "updated_at": backup.updated_at.isoformat()
+            }
+        }), 200
+
+    data = request.get_json(silent=True) or {}
+    required = ("ciphertext", "salt", "iv", "kdf", "iterations", "cipher", "format_version")
+    if any(field not in data for field in required):
+        return jsonify({"error": "Encrypted backup fields are incomplete"}), 400
+
+    if data.get("kdf") != "PBKDF2-HMAC-SHA256":
+        return jsonify({"error": "Unsupported key-derivation algorithm"}), 400
+    if data.get("cipher") != "AES-256-GCM":
+        return jsonify({"error": "Unsupported backup encryption algorithm"}), 400
+    if data.get("format_version") != 1:
+        return jsonify({"error": "Unsupported backup format version"}), 400
+
+    iterations = data.get("iterations")
+    if isinstance(iterations, bool) or not isinstance(iterations, int) or not 100000 <= iterations <= 2000000:
+        return jsonify({"error": "Invalid PBKDF2 iteration count"}), 400
+
+    try:
+        ciphertext = _decode_backup_field(data.get("ciphertext"), "ciphertext")
+        _decode_backup_field(data.get("salt"), "salt", expected_length=16, max_length=128)
+        _decode_backup_field(data.get("iv"), "iv", expected_length=12, max_length=128)
+        if len(ciphertext) < 17:
+            raise ValueError("Ciphertext is too short")
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    if backup is None:
+        backup = EncryptedKeyBackup(
+            user_id=user_id,
+            public_key_id=key_id,
+            ciphertext=data["ciphertext"],
+            salt=data["salt"],
+            iv=data["iv"],
+            kdf=data["kdf"],
+            iterations=iterations,
+            cipher=data["cipher"],
+            format_version=1
+        )
+        db.session.add(backup)
+    else:
+        backup.ciphertext = data["ciphertext"]
+        backup.salt = data["salt"]
+        backup.iv = data["iv"]
+        backup.kdf = data["kdf"]
+        backup.iterations = iterations
+        backup.cipher = data["cipher"]
+        backup.format_version = 1
+
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Could not save encrypted signing-key backup")
+        return jsonify({"error": "Could not save encrypted key backup"}), 500
+
+    return jsonify({
+        "message": "Encrypted key backup saved",
+        "backup": {
+            "public_key_id": backup.public_key_id,
+            "kdf": backup.kdf,
+            "iterations": backup.iterations,
+            "cipher": backup.cipher,
+            "format_version": backup.format_version,
+            "updated_at": backup.updated_at.isoformat()
+        }
     }), 200
 
 
