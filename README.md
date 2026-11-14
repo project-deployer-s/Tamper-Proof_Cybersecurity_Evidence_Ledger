@@ -1,406 +1,376 @@
-# 🔐 Tamper-Proof Cybersecurity Evidence Ledger
+# Tamper-Proof Cybersecurity Evidence Ledger
 
-<h1 align="center">🔐 Tamper-Proof Cybersecurity Evidence Ledger</h1>
+**Sign a message. Prove it is genuine. Make the history impossible to edit quietly.**
 
-<p align="center">
-  <strong>Secure Messaging. Digital Signatures. Verifiable Evidence.</strong>
-</p>
+A web application in which a sender signs a message (or an evidence file) in the browser and a
+receiver can check, at any time, that it really came from the claimed sender and has not been
+changed. Every send and every check is written to a hash-chained, append-only ledger, so the
+history cannot be edited without detection.
 
-<p align="center">
-  A cybersecurity application that protects digital messages using cryptographic signatures and maintains a tamper-evident, hash-chained evidence ledger.
-</p>
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
+![Flask](https://img.shields.io/badge/Flask-3-black)
+![ECDSA](https://img.shields.io/badge/ECDSA-P--256-green)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-database-blue)
+![Tests](https://img.shields.io/badge/tests-pytest-orange)
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3.10%2B-blue?logo=python" alt="Python">
-  <img src="https://img.shields.io/badge/Framework-Flask-black?logo=flask" alt="Flask">
-  <img src="https://img.shields.io/badge/Cryptography-ECDSA%20%7C%20SHA--256-green" alt="Cryptography">
-  <img src="https://img.shields.io/badge/Database-PostgreSQL-blue?logo=postgresql" alt="PostgreSQL">
-  <img src="https://img.shields.io/badge/Tests-Pytest-orange?logo=pytest" alt="Pytest">
-</p>
+> SRM University B.Tech CSE (Cyber Security), Live Project 23CS0303A, 2026-27.
+> Team: Chayan Das, Aditya Kaushik, Deepanshu Semwal.
 
 ---
 
-## 🚀 Overview
-
-**Tamper-Proof Cybersecurity Evidence Ledger** is a secure messaging and evidence-tracking application designed to ensure that digital messages remain authentic, unchanged, and verifiable.
-
-The application uses **ECDSA P-256 digital signatures with SHA-256 hashing** to verify message authenticity and integrity.
-
-Every sending and verification event is recorded in an append-only, hash-chained ledger, making unauthorized modifications detectable.
-
-Whether a message is altered, forged, replayed, expired, or signed using a revoked key, the system identifies the issue and generates an appropriate security alert.
-
-### ✨ Key Features
-
-- 🔑 **Digital Signatures:** Uses ECDSA P-256 to digitally sign messages.
-- 🛡️ **Message Integrity:** Detects unauthorized changes to message content.
-- 🔒 **Private Key Protection:** Private signing keys remain in the user's browser and never leave the device.
-- ⛓️ **Tamper-Evident Ledger:** Every send and verification event is recorded in a SHA-256 hash chain.
-- 🚨 **Security Alerts:** Failed verification attempts generate security alerts.
-- 🔁 **Replay Attack Detection:** Identifies repeated submissions of previously processed messages.
-- ⏳ **Message Expiration:** Rejects messages that exceed their validity period.
-- 🚫 **Key Revocation:** Prevents verification using revoked signing keys.
-- 🧪 **Attack Simulation:** Demonstrates common cybersecurity attacks.
-- 🌐 **Web-Based Interface:** Provides an easy-to-use messaging and verification dashboard.
+## Contents
+1. [What it does](#what-it-does)
+2. [How it works](#how-it-works)
+3. [Run it on your own computer](#run-it-on-your-own-computer)
+4. [Set up Supabase](#set-up-supabase-external-anchor-and-file-storage)
+5. [Deploy on Render, step by step](#deploy-on-render-step-by-step)
+6. [Create an admin account](#create-an-admin-account)
+7. [Using the application](#using-the-application)
+8. [API overview](#api-overview)
+9. [Tests](#tests)
+10. [Project structure](#project-structure)
+11. [Troubleshooting](#troubleshooting)
+12. [Security notes and limits](#security-notes-and-limits)
 
 ---
 
-## ⚙️ How It Works
+## What it does
 
-The application follows a secure message lifecycle.
+| Feature | Description |
+|---|---|
+| Browser-side signing | Each user creates an ECDSA P-256 key pair with the WebCrypto API. The private key stays in the browser; only the public key is sent to the server. |
+| Seven verdicts | `GENUINE`, `TAMPERED`, `INVALID_SIGNATURE`, `UNKNOWN_SENDER`, `REPLAY`, `EXPIRED`, `REVOKED_KEY`. |
+| Hash-chained ledger | Every send and every verification is an entry that stores the hash of the previous entry. Changing an old entry breaks the chain. |
+| External anchor | The latest ledger hash is published to a separate service (Supabase), so rewriting the whole ledger is also detectable. |
+| Alerts | Any verdict other than `GENUINE` raises an alert. |
+| Per-message expiry | The sender can choose how long a signed message stays valid. |
+| Evidence attachments | Files up to 10 MB (`pdf`, `txt`, `csv`, `png`, `jpg`, `jpeg`, `docx`) are hashed and kept in private storage. |
+| Key backup | Download a private key backup, or keep a password-encrypted backup (PBKDF2 + AES-256-GCM, encrypted in the browser). |
+| Attack demo | Admin-only page that runs six attacks and shows how each is detected. |
 
-1. **Account Creation:** Sender and receiver register and generate their signing keys.
-2. **Message Signing:** The sender writes a message, which is digitally signed in the browser.
-3. **Secure Transmission:** The signed message is sent to the receiver.
-4. **Message Verification:** The receiver checks the digital signature, message integrity, timestamp, and key status.
-5. **Ledger Recording:** Sending and verification events are added to the hash-chained ledger.
-6. **Security Monitoring:** Failed verification attempts trigger alerts, while ledger verification detects unauthorized modifications.
+## How it works
 
-### 🔄 System Workflow
-
-```text
-              SENDER
-                 |
-                 v
-          Write a Message
-                 |
-                 v
-         ECDSA P-256 Signing
-                 |
-                 v
-          Send Signed Message
-                 |
-                 v
-              RECEIVER
-                 |
-                 v
-          Verify Signature
-                 |
-           +-----+-----+
-           |           |
-         Valid       Invalid
-           |           |
-           v           v
-         Genuine     Alert Raised
-           |           |
-           +-----+-----+
-                 |
-                 v
-          Record Ledger Event
-                 |
-                 v
-          Hash Chain Verification
-                 |
-                 v
-         Integrity Status Report
+```
+ Sender's browser                         Server                         Receiver's browser
+ ----------------                         ------                         ------------------
+ 1. create key pair (WebCrypto)
+ 2. send public key  ------------------>  store public key
+ 3. build canonical payload
+    {sender, receiver, timestamp,
+     nonce, message}
+ 4. SHA-256 hash + ECDSA sign
+ 5. send message + signature ---------->  store message
+                                          append SENT to ledger  ----+
+                                                                      |   hash chain
+                                          6. receiver clicks "check"  |   + external anchor
+                                          recompute hash, verify      |
+                                          signature, nonce, expiry,   |
+                                          key status                  |
+                                          append VERIFIED to ledger --+
+                                          verdict + alert if not GENUINE ---> shown to receiver
 ```
 
----
-
-## 🛠️ Technology Stack
-
-| Component | Technology |
-|---|---|
-| Backend | Python, Flask |
-| Cryptography | ECDSA P-256, SHA-256 |
-| Frontend | HTML, CSS, JavaScript |
-| Database | PostgreSQL, SQLAlchemy |
-| Database Migrations | Flask-Migrate |
-| Automated Testing | Pytest |
-| Deployment | Render |
-| External Ledger Anchor | Supabase |
-| Rate Limiting | Redis (Optional) |
+The canonical payload is built identically in the browser and in Python (fixed key order,
+compact JSON, UTF-8), so non-English text and emoji verify correctly.
 
 ---
 
-## 📸 Application Pages
+## Run it on your own computer
 
-| Page | Description |
-|---|---|
-| `/` | Register, sign in, and create a signing key |
-| `/send.html` | Sign and send secure messages |
-| `/inbox.html` | Receive messages and verify authenticity |
-| `/ledger.html` | View the hash chain, check integrity, and inspect alerts |
-| `/demo.html` | Simulate cybersecurity attacks (Admin only) |
-| `/health` | Application health check |
+You need **Python 3.10 or newer** and **Git**. Redis and PostgreSQL are *not* needed locally:
+the app falls back to SQLite and in-memory rate limiting in development.
 
----
-
-## 💻 Installation & Local Setup
-
-Follow these steps to run the project on your local machine.
-
-### 1. Clone the Repository
-
+**1. Clone the repository**
 ```bash
-git clone <YOUR_REPOSITORY_URL>
-cd <PROJECT_FOLDER>
+git clone https://github.com/project-deployer-s/Tamper-Proof_Cybersecurity_Evidence_Ledger.git
+cd Tamper-Proof_Cybersecurity_Evidence_Ledger
 ```
 
-### 2. Create a Virtual Environment
-
+**2. Create and activate a virtual environment**
 ```bash
 python -m venv .venv
+# Windows (Command Prompt):  .venv\Scripts\activate
+# Windows (PowerShell):      .venv\Scripts\Activate.ps1
+# macOS / Linux:             source .venv/bin/activate
 ```
 
-Activate the environment:
-
-**Windows**
-
-```bash
-.venv\Scripts\activate
-```
-
-**macOS / Linux**
-
-```bash
-source .venv/bin/activate
-```
-
-### 3. Install Dependencies
-
+**3. Install the dependencies**
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Configure Environment Variables
-
-Create your environment file.
-
-**Windows**
-
+**4. Create your settings file**
 ```bash
-copy .env.example .env
+# Windows:        copy .env.example .env
+# macOS / Linux:  cp .env.example .env
 ```
-
-**macOS / Linux**
-
+Open `.env` and set at least `SECRET_KEY`. Generate one with:
 ```bash
-cp .env.example .env
+python -c "import secrets; print(secrets.token_hex(48))"
 ```
+Leave `APP_ENV=development` and `DATABASE_URL=sqlite:///evidence_ledger.db` for local use.
 
-Open `.env` and configure your `SECRET_KEY` and other required settings.
-
-### 5. Initialize the Database
-
+**5. Create the database tables**
 ```bash
 flask --app wsgi db upgrade
 ```
 
-### 6. Start the Application
-
+**6. Start the app**
 ```bash
 flask --app wsgi run
 ```
+Open <http://127.0.0.1:5000>.
 
-Open your browser and visit:
+> Always start the app through `wsgi.py` (`flask --app wsgi ...` or `gunicorn wsgi:app`).
+> The `app/` folder is the application package; the top-level `app.py` is not used.
 
-**http://127.0.0.1:5000**
-
-### 7. Run Automated Tests
-
-```bash
-python -m pytest
-```
-
-> **Important:** Start the application using `wsgi.py`. The `app/` package contains the application. The old top-level `app.py` is not used.
+**What works without Supabase:** registration, key creation, signing, sending and checking
+messages, alerts and the attack demos that do not touch the anchor. **What needs Supabase:**
+the ledger's **Check the chain** button (it compares against the external anchor) and file
+attachments. To enable them locally, follow the next section and put the two Supabase values in `.env`.
 
 ---
 
-## ☁️ Deployment on Render
+## Set up Supabase (external anchor and file storage)
 
-The application can be deployed using [Render](https://render.com/).
+Supabase holds the part of the evidence that must live *outside* your database: the published
+ledger hash, and uploaded files. The free plan is enough.
 
-Configure the following settings:
+1. Create a project at <https://supabase.com>.
+2. Open **SQL Editor** and run this once:
+
+```sql
+-- Latest published ledger hash (always one row, id = 1)
+create table if not exists public.ledger_anchor (
+  id          integer primary key,
+  latest_seq  bigint      not null,
+  latest_hash text        not null,
+  updated_at  timestamptz not null default now()
+);
+
+-- Every checkpoint ever published
+create table if not exists public.ledger_anchor_history (
+  seq         bigint      primary key,
+  entry_hash  text        not null,
+  anchored_at timestamptz not null default now()
+);
+
+-- Lock both tables to the public; the server's secret key bypasses this.
+alter table public.ledger_anchor         enable row level security;
+alter table public.ledger_anchor_history enable row level security;
+```
+
+3. Open **Storage**, create a bucket named exactly **`evidence-attachments`**, and leave it
+   **private** (do not tick "Public bucket").
+4. Open **Project Settings > API** and copy:
+   - the **Project URL** into `SUPABASE_URL`
+   - the **secret / service-role key** into `SUPABASE_SECRET_KEY`
+
+The secret key is a server-side password. Never put it in front-end code, never commit it.
+
+---
+
+## Deploy on Render, step by step
+
+You need free accounts on [GitHub](https://github.com), [Render](https://render.com) and
+[Supabase](https://supabase.com). Do the Supabase section above first.
+
+### 1. Put the code in your own GitHub repository
+Fork this repository (or push a copy to your own account). Render deploys from GitHub.
+
+### 2. Create the PostgreSQL database
+Render dashboard > **New** > **PostgreSQL**. Pick a name and the region closest to you. When it
+is ready, copy the **Internal Database URL**.
+
+### 3. Create the Redis-compatible store
+In production the app refuses to start without shared rate-limiting storage.
+Render dashboard > **New** > **Key Value**. Use the **same region** as the database. Copy its
+**Internal URL** (it begins with `redis://`).
+
+### 4. Create the web service
+Render dashboard > **New** > **Web Service** > connect your GitHub repository, then set:
 
 | Setting | Value |
 |---|---|
+| Language / Runtime | Python 3 |
+| Branch | `main` |
+| Region | same as the database and Key Value |
 | Build Command | `pip install -r requirements.txt && flask --app wsgi db upgrade` |
 | Start Command | `gunicorn wsgi:app` |
 | Health Check Path | `/health` |
 
-### Environment Variables
+### 5. Add the environment variables
+In the web service > **Environment**:
 
-Configure the following environment variables in your Render dashboard.
-
-| Variable | Description |
+| Variable | Value |
 |---|---|
-| `FLASK_ENV` | Set to `production` |
-| `SECRET_KEY` | Strong secret containing at least 64 random characters |
-| `DATABASE_URL` | Render PostgreSQL connection URL |
-| `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_SECRET_KEY` | Supabase secret key |
-| `REDIS_URL` | Optional Redis connection for shared rate limiting |
+| `APP_ENV` | `production` |
+| `PYTHON_VERSION` | `3.12.7` |
+| `SECRET_KEY` | 64 or more random characters (`python -c "import secrets; print(secrets.token_hex(48))"`) |
+| `DATABASE_URL` | Internal Database URL from step 2 |
+| `REDIS_URL` | Internal URL from step 3 |
+| `SUPABASE_URL` | from the Supabase section |
+| `SUPABASE_SECRET_KEY` | from the Supabase section |
 
-### Deployment Notes
+In production the app **will not start** unless `SECRET_KEY` is at least 64 characters,
+`DATABASE_URL` is PostgreSQL and `REDIS_URL` is set. That is intentional.
 
-- Supabase anchor settings are required for the ledger's external anchor verification.
-- Without the Supabase settings, the **Check the Chain** operation reports a failed check.
-- If Redis is not configured, rate limiting uses in-memory storage.
-- Keep production secrets in Render environment variables. Never commit them to GitHub.
+### 6. Deploy
+Click **Create Web Service**. The build installs the packages and creates the tables
+(`flask --app wsgi db upgrade`). When the log shows the service is live, open:
+
+- `https://<your-service>.onrender.com/health` -> should answer `{"status": "healthy"}`
+- `https://<your-service>.onrender.com/` -> the sign-in page
+
+### 7. Create an admin account
+The attack demo and the alerts list need an admin. See the next section.
+
+### 8. Before a demonstration
+Render's free web service sleeps when idle. Open the site five minutes beforehand so it wakes
+up. Check Render's current free-plan terms: free databases may expire or be limited, so do not
+rely on one for data you must keep.
+
+Every later `git push` to the branch redeploys automatically.
 
 ---
 
-## 🧪 Security Attack Demonstration
+## Create an admin account
 
-The application includes an administrator-only attack demonstration page to showcase how the system responds to different security threats.
+There is deliberately no public sign-up for admins. Register a normal account on the site
+first (for example `admin`), then promote it.
 
-| Attack Scenario | Expected Result |
-|---|---|
-| Message Tampering | Tampered |
-| Forged Digital Signature | Invalid Signature |
-| Replay Attack | Replay Detected |
-| Expired Message | Expired |
-| Revoked Signing Key | Revoked Key |
-| Ledger Modification | Chain Integrity Failure |
+**Local:**
+```bash
+flask --app wsgi shell
+```
+```python
+from app.models import User
+from app.extensions import db
+u = User.query.filter_by(username="admin").first()
+u.role = "admin"
+db.session.commit()
+exit()
+```
 
-### 🎯 5-Minute Live Demonstration
-
-Follow these steps to demonstrate the application's functionality.
-
-**Step 1 – Create Users**
-
-- Open the application.
-- Register two accounts: `alice` and `bob`.
-- Let both users generate their signing keys.
-
-**Step 2 – Send a Secure Message**
-
-- Log in as `alice`.
-- Send the message: `Hello Bob`.
-
-**Step 3 – Verify the Message**
-
-- Log in as `bob`.
-- Open the inbox.
-- Check the received message.
-
-**Expected Result:**
-
-✅ **Genuine** – The digital signature is valid, and the message has not been altered.
-
-**Step 4 – Demonstrate Security Attacks**
-
-- Log in using the administrator account.
-- Open the Attack Demo page.
-- Run the following demonstrations:
-  - Message tampering
-  - Forged signature
-  - Replay attack
-  - Expired message
-  - Revoked signing key
-
-**Step 5 – Verify the Evidence Ledger**
-
-- Open the Ledger page.
-- Click **Check the Chain**.
-- Confirm that the ledger is valid.
-- Run the ledger-tampering demonstration.
-- Check the chain again.
-- Observe how the system identifies the first broken entry.
-
-**Step 6 – Explain the Security Limitation**
-
-Explain that the ledger is tamper-evident, not absolutely tamper-proof.
-
-If an attacker can rewrite the entire database and the external anchor together, the system cannot independently detect that coordinated modification.
+**On Render:** use the database's **External Database URL** with `psql`
+(or any PostgreSQL client):
+```sql
+UPDATE users SET role = 'admin' WHERE username = 'admin';
+```
+Sign out and sign in again so the new role takes effect.
 
 ---
 
-## ✅ Test Cases
+## Using the application
 
-The following test cases evaluate the application's security and functionality.
+| Page | What it does |
+|---|---|
+| `/` | Create an account, sign in, create your signing key |
+| `/send.html` | Write a message, choose its expiry, attach a file, sign and send |
+| `/inbox.html` | Open a received message and check it |
+| `/ledger.html` | See the hash chain, **Check the chain**, and the alerts |
+| `/demo.html` | Run the six attack demonstrations (admin only) |
+| `/health` | Health check used by Render |
 
-| # | Test Scenario | Expected Result |
-|---|---|---|
-| 1 | Register with a short password | Error displayed; account not created |
-| 2 | Send and verify a message | Genuine; `SENT` and `VERIFIED` ledger entries |
-| 3 | Modify message text after sending | Tampered; security alert generated |
-| 4 | Modify text and rewrite its hash | Invalid Signature |
-| 5 | Submit the same message twice | Replay Detected |
-| 6 | Submit a message with an old timestamp | Expired |
-| 7 | Revoke the sender's signing key | Revoked Key |
-| 8 | Edit a ledger entry directly in the database | First broken entry identified |
-| 9 | Send non-English text or emoji | Genuine; browser and server agree on canonical JSON |
-| 10 | Send a message containing `<script>` | Displayed as text; script never executes |
+### Keep your private key safe
+After creating your key, click **Download private key backup** and store the file somewhere
+safe. Use the same browser for a demo, and not a private window, because the key lives in that
+browser. If the key is lost, revoke it and create a new one. Anyone holding the backup file
+can sign as you, so never share it or commit it.
 
-### Run Tests
+### Five-minute demonstration
+1. Register `alice` and `bob`. Let each create a key.
+2. As alice, send "Hello Bob". As bob, open the inbox and check it: **Genuine**.
+3. Sign in as the admin and open **Attack demo**. Run message tampering, forged signature,
+   replay, expired message and revoked key. Each shows its expected verdict.
+4. Open **Ledger**, click **Check the chain**: valid. Run the ledger-tampering demo and check
+   again: the first broken entry is named.
+5. Say the limit plainly: someone who rewrites the whole database *and* the external anchor
+   together cannot be detected.
 
-Execute the following command to run the automated test suite:
+| Attack | Expected verdict |
+|---|---|
+| Message text changed | `TAMPERED` |
+| Text changed and hash rewritten | `INVALID_SIGNATURE` |
+| Same message submitted again | `REPLAY` |
+| Signed message past its expiry | `EXPIRED` |
+| Sender's key revoked | `REVOKED_KEY` |
+| Ledger entry edited | Chain check reports the first broken entry |
 
+---
+
+## API overview
+
+All routes are under `/api`. Everything except registration and login needs
+`Authorization: Bearer <token>` (JWT, valid 30 minutes).
+
+| Area | Routes |
+|---|---|
+| Accounts | `POST /users`, `POST /login`, `GET /users` |
+| Keys | `POST` and `GET /users/{id}/keys`, `POST /users/{id}/keys/{key_id}/revoke`, `GET` and `PUT /users/{id}/keys/{key_id}/backup` |
+| Messages | `POST /messages`, `GET /messages/inbox`, `GET /messages/sent`, `POST /messages/{id}/verify` |
+| Ledger | `GET /ledger`, `GET /ledger/verify` |
+| Alerts | `GET /alerts` (admin) |
+| Attack demo | `GET /demo/attacks`, `POST /demo/attacks/{type}`, step-by-step `/demo/...` routes (admin) |
+
+---
+
+## Tests
 ```bash
 python -m pytest
 ```
+The suite covers hashing, canonical JSON, ECDSA signing and the browser signature format,
+nonce and expiry rules, the seven verdicts, authentication, anchor integrity and the demos.
 
 ---
 
-## 🔐 Security Architecture & Limitations
-
-The application's security is built around three main principles.
-
-### 1. Authenticity
-
-ECDSA P-256 digital signatures allow the receiver to verify that a message was signed using the corresponding private key.
-
-### 2. Integrity
-
-SHA-256 hashing and signature verification help detect unauthorized modifications to message content.
-
-### 3. Auditability
-
-The append-only, hash-chained ledger links recorded events together, allowing modifications to existing entries to be detected through chain verification.
-
-### Important Security Considerations
-
-- Private signing keys remain in the browser and are never transmitted to the server.
-- Users should securely back up their private keys using the provided download option.
-- Losing a private key requires the account to generate a new signing key.
-- The hash chain provides tamper evidence, not absolute protection against an attacker who controls both the database and the external anchor.
-- External anchoring provides an additional integrity reference but does not eliminate every possible attack.
-
----
-
-## 📂 Project Structure
-
-```text
-project/
-│
-├── app/
-│   ├── Application modules
-│   ├── Routes
-│   ├── Models
-│   └── Templates and static assets
-│
-├── migrations/
-│   └── Database migration files
-│
-├── tests/
-│   └── Automated test cases
-│
-├── .env.example
-├── requirements.txt
-├── wsgi.py
-└── README.md
+## Project structure
+```
+app/
+  __init__.py        application factory (create_app)
+  config.py          settings and production safety checks
+  extensions.py      database, migrations, rate limiter, JWT
+  models.py          users, keys, messages, ledger, alerts, outbox, attachments
+  routes/api.py      the JSON API
+  services/          ledger, verification, anchoring, storage, attachments, demos
+security/            hashing, canonical JSON, ECDSA, nonce/expiry, verdicts
+templates/ static/   the web pages, styles and browser scripts
+pages.py             routes for the web pages
+migrations/          database migrations (Flask-Migrate / Alembic)
+tests/               automated tests
+wsgi.py              entry point (gunicorn wsgi:app)
+migrate_sqlite_to_postgres.py   one-off helper to copy a local SQLite database to PostgreSQL
+.env.example         template for your settings
 ```
 
-*Note: This is a simplified project structure. Actual module names may differ.*
+---
+
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| Render deploy fails with "Production requires a SECRET_KEY..." | Use a `SECRET_KEY` of 64+ characters. |
+| "Production requires a PostgreSQL database" | `DATABASE_URL` must be the Render PostgreSQL URL. |
+| "Production requires REDIS_URL" | Create a Key Value instance and set `REDIS_URL`. |
+| `ModuleNotFoundError` on build | Make sure `requirements.txt` is the one in this repository. |
+| **Check the chain** says the check failed | `SUPABASE_URL` / `SUPABASE_SECRET_KEY` are missing or wrong, or the two anchor tables were not created. |
+| Attachments fail | The bucket must be named `evidence-attachments`. |
+| "Admin access required" in the attack demo | Promote the account (see above) and sign in again. |
+| First page load takes about a minute on Render | The free service was asleep. Wait and refresh. |
+| Messages cannot be signed after changing browser | The private key is stored per browser. Restore it from your backup file. |
 
 ---
 
-## 🎓 Project Purpose
+## Security notes and limits
 
-This project demonstrates how cryptographic techniques can be applied to secure digital communication and maintain trustworthy digital evidence.
+- The ledger is **tamper-evident, not tamper-proof**. An attacker who can rewrite the database
+  and the external anchor together cannot be detected by this system.
+- This is a tool for detecting tampering. It is not a guarantee of legal admissibility and not
+  a replacement for established digital-forensics procedures.
+- Private keys never leave the browser. The server stores public keys, signatures and
+  hashes only.
+- Keep all secrets in environment variables. `.env` is ignored by Git; never commit it, and
+  never commit database dumps or key backups.
 
-It combines digital signatures, message verification, attack detection, and hash-chain auditing into one practical cybersecurity application.
-
-The project aims to demonstrate how digital communication can become more trustworthy through cryptographic verification and tamper-evident record keeping.
-
----
-
-<p align="center">
-  <strong>🔐 Secure Communication | Cryptographic Verification | Tamper-Evident Evidence</strong>
-</p>
-
-<p align="center">
-  Built as a Cybersecurity Project.
-</p>
+## License
+MIT. See [LICENSE](LICENSE).
